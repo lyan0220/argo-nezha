@@ -1,0 +1,27 @@
+---
+applications:
+  - name: nz-dashboard
+    docker:
+      # 替换为你 GHCR 上的镜像地址
+      image: ghcr.io/<owner>/argo-nezha:latest
+    memory: 512M
+    disk_quota: 1G
+    instances: 1
+    health-check-type: http
+    health-check-http-endpoint: /health
+    timeout: 180
+    env:
+      # === 必填 ===
+      ARGO_DOMAIN: nezha.example.com
+      ARGO_AUTH: eyJhIjoi...
+      GH_TOKEN: ghp_xxxxxxxx
+      GH_REPO_OWNER: your_username
+      GH_REPO_NAME: nezha-backup
+      GH_BRANCH: main
+      ZIP_PASSWORD: change-me
+      NZ_UUID: 00000000-0000-0000-0000-000000000000
+      # === 可选 ===
+      # NZ_CLIENT_SECRET: ""
+      # NZ_TLS: "true"
+      # DASHBOARD_VERSION: latest
+      # PROJECT_URL: ""   # CF 不需要保活，留空即可

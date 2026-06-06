@@ -1,0 +1,1615 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+      Protect Endangered Animals - Panda and Endangered Species Conservation
+      Initiative
+    </title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      :root {
+        --primary-color: #1a5d1a;
+        --secondary-color: #4a9e4a;
+        --accent-color: #ff6b35;
+        --accent-green: #6bc77a;
+        --bg-light: #f5f7f5;
+        --bg-white: #ffffff;
+        --text-dark: #1e3a1e;
+        --text-medium: #3d5c3d;
+        --text-light: #7a8e7a;
+        --white: #ffffff;
+        --shadow: rgba(26, 93, 26, 0.12);
+        --shadow-hover: rgba(26, 93, 26, 0.2);
+      }
+
+      body {
+        font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC",
+          "Hiragino Sans GB", Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.6;
+        color: var(--text-dark);
+        overflow-x: hidden;
+        background-color: var(--bg-light);
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+
+      /* 导航栏 */
+      .navbar {
+        background: var(--bg-white);
+        box-shadow: 0 2px 12px var(--shadow);
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        padding: 1rem 0;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+      }
+
+      .navbar .container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .logo {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: var(--primary-color);
+        text-transform: uppercase;
+      }
+
+      .nav-menu {
+        display: flex;
+        list-style: none;
+        gap: 2.5rem;
+      }
+
+      .nav-menu a {
+        text-decoration: none;
+        color: var(--text-dark);
+        font-weight: 600;
+        transition: color 0.3s, transform 0.3s;
+        position: relative;
+      }
+
+      .nav-menu a::after {
+        content: "";
+        position: absolute;
+        bottom: -5px;
+        left: 0;
+        width: 0;
+        height: 2px;
+        background: linear-gradient(
+          90deg,
+          var(--secondary-color),
+          var(--accent-green)
+        );
+        transition: width 0.3s ease;
+      }
+
+      .nav-menu a:hover {
+        color: var(--secondary-color);
+        transform: translateY(-2px);
+      }
+
+      .nav-menu a:hover::after {
+        width: 100%;
+      }
+
+      /* 移动端菜单按钮 */
+      .menu-toggle {
+        display: none;
+        flex-direction: column;
+        cursor: pointer;
+        gap: 5px;
+        z-index: 1001;
+      }
+
+      .menu-toggle .bar {
+        width: 25px;
+        height: 3px;
+        background-color: var(--primary-color);
+        transition: all 0.3s ease;
+      }
+
+      /* 主区域 */
+      .hero {
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        background: linear-gradient(
+            135deg,
+            rgba(26, 93, 26, 0.88) 0%,
+            rgba(74, 158, 74, 0.78) 65%,
+            rgba(107, 199, 122, 0.7) 100%
+          ),
+          url("https://images6.alphacoders.com/101/1017260.jpg?q=80&w=1920&auto=format&fit=crop")
+            center/cover no-repeat fixed;
+        overflow: hidden;
+        text-align: center;
+      }
+
+      .hero-content {
+        z-index: 2;
+        color: var(--white);
+        padding: 2rem;
+        max-width: 900px;
+      }
+
+      .hero-title {
+        font-size: 4rem;
+        margin-bottom: 1.5rem;
+        text-shadow: 3px 3px 8px rgba(0, 0, 0, 0.5),
+          0 0 20px rgba(26, 93, 26, 0.3);
+        animation: fadeInUp 1s ease-out;
+        font-weight: 900;
+        white-space: nowrap;
+        letter-spacing: 0.05em;
+        line-height: 1.2;
+        text-align: center;
+        max-width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .hero-subtitle {
+        font-size: 1.75rem;
+        margin-bottom: 3rem;
+        opacity: 0.98;
+        animation: fadeInUp 1s ease-out 0.2s backwards;
+        font-weight: 300;
+        text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.4);
+        letter-spacing: 0.02em;
+      }
+
+      .cta-button {
+        padding: 1rem 3rem;
+        font-size: 1.2rem;
+        background: var(--white);
+        color: var(--primary-color);
+        border: none;
+        border-radius: 50px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        animation: fadeInUp 1s ease-out 0.4s backwards;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      }
+
+      .cta-button:hover {
+        transform: translateY(-5px) scale(1.05);
+        box-shadow: 0 12px 30px rgba(26, 93, 26, 0.4);
+        background: linear-gradient(135deg, #ffffff 0%, #e8f5e9 100%);
+        color: var(--primary-color);
+      }
+
+      /* 统计数据 */
+      .stats {
+        background: var(--white);
+        padding: 4rem 0;
+        box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.05);
+      }
+
+      .stats .container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 2rem;
+      }
+
+      .stat-card {
+        text-align: center;
+        padding: 2rem;
+        background: linear-gradient(
+          135deg,
+          var(--primary-color) 0%,
+          var(--secondary-color) 100%
+        );
+        border-radius: 15px;
+        color: var(--white);
+        transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+        box-shadow: 0 5px 18px var(--shadow);
+        opacity: 0;
+        transform: translateY(20px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .stat-card.visible {
+        opacity: 1;
+        transform: translateY(0);
+        transition-delay: var(--delay);
+      }
+
+      .stat-card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 15px 35px var(--shadow-hover);
+        background: linear-gradient(
+          135deg,
+          var(--secondary-color) 0%,
+          var(--primary-color) 100%
+        );
+        border-color: rgba(255, 255, 255, 0.2);
+      }
+
+      .stat-number {
+        font-size: 3.5rem;
+        font-weight: 900;
+        margin-bottom: 0.5rem;
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+      }
+
+      .stat-label {
+        font-size: 1.2rem;
+        opacity: 0.9;
+        font-weight: 500;
+      }
+
+      /* 动物介绍区域 */
+      .animals-section {
+        padding: 6rem 0;
+        background: var(--bg-light);
+      }
+
+      .section-title {
+        text-align: center;
+        font-size: 3rem;
+        margin-bottom: 0.5rem;
+        color: var(--primary-color);
+        font-weight: 800;
+      }
+
+      .section-subtitle {
+        text-align: center;
+        font-size: 1.3rem;
+        color: var(--text-light);
+        margin-bottom: 4rem;
+        font-style: italic;
+      }
+
+      /* 大熊猫特色介绍 */
+      .animal-featured {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 3rem;
+        margin-bottom: 5rem;
+        background: var(--bg-white);
+        padding: 4rem;
+        border-radius: 20px;
+        box-shadow: 0 15px 40px var(--shadow);
+        transition: transform 0.4s ease, box-shadow 0.4s ease;
+        opacity: 0;
+        transform: scale(0.95);
+        border: 1px solid rgba(26, 93, 26, 0.08);
+      }
+
+      .animal-featured.visible {
+        opacity: 1;
+        transform: scale(1);
+        transition: transform 0.6s ease-out, box-shadow 0.6s ease-out,
+          opacity 0.6s ease-out;
+      }
+
+      .animal-featured:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 25px 60px var(--shadow-hover);
+        border-color: rgba(26, 93, 26, 0.15);
+      }
+
+      .animal-image-container {
+        position: relative;
+        overflow: hidden;
+        border-radius: 18px;
+        height: 450px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      }
+
+      .animal-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        filter: brightness(0.98);
+      }
+
+      .animal-featured:hover .animal-image {
+        transform: scale(1.1);
+        filter: brightness(1.05);
+      }
+
+      .animal-name {
+        font-size: 2.8rem;
+        color: var(--primary-color);
+        margin-bottom: 0.5rem;
+        font-weight: 700;
+      }
+
+      .animal-scientific {
+        font-style: italic;
+        color: var(--text-light);
+        margin-bottom: 2rem;
+        font-size: 1.1rem;
+      }
+
+      .animal-details {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+
+      .detail-item {
+        line-height: 1.8;
+        padding-left: 15px;
+        border-left: 3px solid var(--secondary-color);
+      }
+
+      .detail-item strong {
+        color: var(--secondary-color);
+        font-weight: 600;
+      }
+
+      /* 动物卡片网格 */
+      .animals-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2.5rem;
+      }
+
+      .animal-card {
+        background: var(--bg-white);
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 8px 20px var(--shadow);
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        cursor: pointer;
+        opacity: 0;
+        transform: translateY(30px);
+        border: 1px solid rgba(26, 93, 26, 0.06);
+        display: flex;
+        flex-direction: column;
+      }
+
+      .animal-card.visible {
+        opacity: 1;
+        transform: translateY(0);
+        transition-delay: var(--delay);
+      }
+
+      .animal-card:hover {
+        transform: translateY(-15px) scale(1.02);
+        box-shadow: 0 20px 45px var(--shadow-hover);
+        border-color: rgba(74, 158, 74, 0.2);
+      }
+
+      .card-image {
+        height: 250px;
+        background: linear-gradient(
+          135deg,
+          rgba(26, 93, 26, 0.85) 0%,
+          rgba(74, 158, 74, 0.7) 50%,
+          rgba(107, 199, 122, 0.6) 100%
+        );
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .card-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0.4;
+        transition: all 0.6s ease;
+        filter: grayscale(40%);
+      }
+
+      .animal-card:hover .card-image img {
+        opacity: 0.7;
+        filter: grayscale(0%);
+        transform: scale(1.2);
+      }
+
+      .card-content .animal-emoji {
+        font-size: 2.2rem;
+        margin-right: 10px;
+        line-height: 1;
+        display: inline-block;
+        text-shadow: none;
+        transition: transform 0.3s ease;
+      }
+
+      .animal-card:hover .card-content .animal-emoji {
+        transform: rotate(-10deg);
+      }
+
+      .card-content {
+        padding: 2rem;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+      }
+
+      .card-content h4 {
+        font-size: 1.6rem;
+        color: var(--primary-color);
+        margin-bottom: 0.5rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+      }
+
+      .scientific {
+        font-style: italic;
+        color: var(--text-light);
+        font-size: 1rem;
+        margin-bottom: 1rem;
+      }
+
+      .habitat {
+        color: var(--secondary-color);
+        font-weight: 600;
+        margin-bottom: 1rem;
+      }
+
+      .description {
+        color: var(--text-dark);
+        margin-bottom: 1.5rem;
+        line-height: 1.6;
+        flex-grow: 1;
+      }
+
+      .card-btn {
+        width: 100%;
+        padding: 0.9rem;
+        background: var(--primary-color);
+        color: var(--white);
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: background 0.3s, transform 0.3s;
+      }
+
+      .card-btn:hover {
+        background: var(--secondary-color);
+        transform: translateY(-2px);
+      }
+
+      /* 保护必要性区域 */
+      .protection-section {
+        padding: 6rem 0;
+        background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+      }
+
+      .reasons-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2.5rem;
+        margin-top: 3rem;
+      }
+
+      .reason-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f5faf5 100%);
+        padding: 3rem;
+        border-radius: 15px;
+        text-align: center;
+        border: 1px solid rgba(26, 93, 26, 0.12);
+        box-shadow: 0 5px 18px var(--shadow);
+        transition: all 0.3s ease;
+        opacity: 0;
+        transform: rotateX(-30deg) translateY(50px);
+        transform-origin: bottom;
+      }
+
+      .reason-card.visible {
+        opacity: 1;
+        transform: rotateX(0) translateY(0);
+        transition: all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        transition-delay: var(--delay);
+      }
+
+      .reason-card:hover {
+        transform: translateY(-8px) scale(1.02);
+        box-shadow: 0 15px 38px var(--shadow-hover);
+        background: linear-gradient(135deg, #ffffff 0%, #e8f5e9 100%);
+        border-color: rgba(74, 158, 74, 0.25);
+      }
+
+      .reason-icon {
+        font-size: 3.5rem;
+        margin-bottom: 1rem;
+      }
+
+      .reason-card h3 {
+        color: var(--primary-color);
+        margin-bottom: 1rem;
+        font-size: 1.7rem;
+        font-weight: 700;
+      }
+
+      .reason-card p {
+        color: var(--text-dark);
+        line-height: 1.8;
+        font-size: 1rem;
+      }
+
+      /* 行动倡议区域 */
+      .action-section {
+        padding: 6rem 0;
+        background: linear-gradient(
+            135deg,
+            rgba(26, 93, 26, 0.92) 0%,
+            rgba(74, 158, 74, 0.88) 50%,
+            rgba(107, 199, 122, 0.85) 100%
+          ),
+          url("https://images.unsplash.com/photo-1548222606-6c4f581fd09d?q=80&w=1920&auto=format&fit=crop")
+            center/cover no-repeat fixed;
+        color: var(--white);
+        position: relative;
+      }
+
+      .action-section .section-title,
+      .action-section .section-subtitle {
+        color: var(--white);
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+      }
+
+      .actions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+        margin: 4rem 0;
+      }
+
+      .action-item {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(8px);
+        padding: 2.5rem;
+        border-radius: 15px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        opacity: 0;
+        transform: translateX(-50px);
+      }
+
+      .action-item.visible {
+        opacity: 1;
+        transform: translateX(0);
+        transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+        transition-delay: var(--delay);
+      }
+
+      .action-item:hover {
+        background: rgba(255, 255, 255, 0.25);
+        transform: translateY(-5px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+      }
+
+      .action-number {
+        font-size: 3.5rem;
+        font-weight: 900;
+        opacity: 0.4;
+        margin-bottom: 0.5rem;
+        color: var(--white);
+      }
+
+      .action-item h3 {
+        margin-bottom: 1rem;
+        font-size: 1.8rem;
+        font-weight: 700;
+      }
+
+      .action-item p {
+        line-height: 1.8;
+        opacity: 0.9;
+      }
+
+      .pledge-box {
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        padding: 3rem;
+        border-radius: 20px;
+        text-align: center;
+        margin-top: 4rem;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+      }
+
+      .pledge-box h3 {
+        font-size: 2.2rem;
+        margin-bottom: 1rem;
+        font-weight: 800;
+      }
+
+      .pledge-box p {
+        font-size: 1.3rem;
+        margin-bottom: 2rem;
+        opacity: 0.9;
+      }
+
+      .pledge-button {
+        padding: 1.1rem 3.5rem;
+        font-size: 1.3rem;
+        background: var(--white);
+        color: var(--primary-color);
+        border: none;
+        border-radius: 50px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      }
+
+      .pledge-button:hover {
+        transform: translateY(-5px) scale(1.05);
+        box-shadow: 0 12px 30px rgba(26, 93, 26, 0.4);
+        background: linear-gradient(135deg, #ffffff 0%, #e8f5e9 100%);
+      }
+
+      /* 页脚 */
+      .footer {
+        background: var(--text-dark);
+        color: var(--white);
+        padding: 2rem 0;
+        text-align: center;
+      }
+
+      .footer-links {
+        margin-top: 1rem;
+      }
+
+      .footer-links a {
+        color: var(--white);
+        text-decoration: none;
+        opacity: 0.8;
+        padding: 0 10px;
+        transition: opacity 0.3s;
+      }
+
+      .footer-links a:hover {
+        opacity: 1;
+        text-decoration: underline;
+      }
+
+      /* 模态框 */
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 2000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.75);
+        animation: fadeIn 0.3s;
+        overflow-y: auto;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .modal-content {
+        background-color: var(--white);
+        margin: 5% auto;
+        padding: 3rem;
+        border-radius: 20px;
+        width: 90%;
+        max-width: 750px;
+        position: relative;
+        animation: slideDown 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      }
+
+      .close {
+        position: absolute;
+        right: 2rem;
+        top: 1.5rem;
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: var(--text-light);
+        cursor: pointer;
+        transition: color 0.3s;
+        line-height: 1;
+      }
+
+      .close:hover {
+        color: var(--accent-color);
+        transform: rotate(90deg);
+      }
+
+      #pledgeForm {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        margin-top: 2rem;
+      }
+
+      #pledgeForm input,
+      #pledgeForm textarea {
+        padding: 1.2rem;
+        border: 2px solid #ddd;
+        border-radius: 10px;
+        font-size: 1rem;
+        font-family: inherit;
+        transition: border-color 0.3s, box-shadow 0.3s;
+      }
+
+      #pledgeForm input:focus,
+      #pledgeForm textarea:focus {
+        border-color: var(--secondary-color);
+        box-shadow: 0 0 0 3px rgba(74, 124, 36, 0.2);
+        outline: none;
+      }
+
+      #pledgeForm textarea {
+        min-height: 180px;
+        resize: vertical;
+      }
+
+      .submit-btn {
+        padding: 1.2rem;
+        background: var(--primary-color);
+        color: var(--white);
+        border: none;
+        border-radius: 10px;
+        font-size: 1.2rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.3s, transform 0.3s;
+      }
+
+      .submit-btn:hover {
+        background: var(--secondary-color);
+        transform: translateY(-2px);
+      }
+
+      /* 动画 */
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(40px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      @keyframes slideDown {
+        from {
+          transform: translateY(-100px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+
+      /* 响应式设计 */
+      @media (max-width: 992px) {
+        .hero-title {
+          font-size: 3.2rem;
+          white-space: nowrap;
+        }
+
+        .hero-subtitle {
+          font-size: 1.5rem;
+        }
+
+        .animal-featured {
+          grid-template-columns: 1fr;
+          padding: 3rem;
+        }
+
+        .animal-image-container {
+          height: 380px;
+        }
+
+        .navbar .container {
+          padding: 0 20px;
+        }
+
+        .nav-menu {
+          position: fixed;
+          top: 0;
+          right: -100%;
+          width: 70%;
+          height: 100%;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          background-color: var(--primary-color);
+          box-shadow: -2px 0 10px rgba(0, 0, 0, 0.2);
+          transition: right 0.4s ease-in-out;
+        }
+
+        .nav-menu.active {
+          right: 0;
+        }
+
+        .nav-menu a {
+          color: var(--white);
+          font-size: 1.5rem;
+          padding: 1rem 0;
+          width: 100%;
+          text-align: center;
+        }
+
+        .nav-menu a:hover {
+          color: #a8e6cf;
+        }
+
+        .menu-toggle {
+          display: flex;
+        }
+
+        /* 汉堡菜单关闭时的 X 动画 */
+        .menu-toggle.active .bar:nth-child(2) {
+          opacity: 0;
+        }
+
+        .menu-toggle.active .bar:nth-child(1) {
+          transform: translateY(8px) rotate(45deg);
+        }
+
+        .menu-toggle.active .bar:nth-child(3) {
+          transform: translateY(-8px) rotate(-45deg);
+        }
+      }
+
+      @media (max-width: 768px) {
+        .stats .container {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .section-title {
+          font-size: 2.5rem;
+        }
+
+        .animal-image-container {
+          height: 300px;
+        }
+
+        .hero {
+          background-attachment: scroll;
+        }
+
+        .action-section {
+          background-attachment: scroll;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .hero-title {
+          font-size: 2.8rem;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .hero-content {
+          padding: 1.5rem;
+          max-width: 95%;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .stats .container {
+          grid-template-columns: 1fr;
+        }
+
+        .hero-title {
+          font-size: 2rem;
+          white-space: nowrap;
+          letter-spacing: 0;
+        }
+
+        .hero-subtitle {
+          font-size: 1.1rem;
+        }
+
+        .animal-featured {
+          padding: 1.5rem;
+        }
+
+        .animal-name {
+          font-size: 2rem;
+        }
+
+        .modal-content {
+          padding: 2rem 1rem;
+          margin: 15% auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar">
+      <div class="container">
+        <div class="logo">🐼 Protect Endangered Animals</div>
+        <div class="menu-toggle" onclick="toggleMenu()">
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+        </div>
+        <ul class="nav-menu">
+          <li><a href="#home" onclick="closeMenu()">Home</a></li>
+          <li><a href="#animals" onclick="closeMenu()">Animals</a></li>
+          <li><a href="#protection" onclick="closeMenu()">Conservation</a></li>
+          <li><a href="#action" onclick="closeMenu()">Take Action</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <section id="home" class="hero">
+      <div class="hero-content">
+        <h1 class="hero-title">
+          Protect Endangered Animals<br />Guard Our Planet
+        </h1>
+        <p class="hero-subtitle">
+          Every species lost is a loss to Earth's biodiversity
+        </p>
+        <button class="cta-button" onclick="scrollToSection('animals')">
+          Learn More
+        </button>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="container">
+        <div class="stat-card" style="--delay: 0s">
+          <div class="stat-number" data-target="16000">0</div>
+          <div class="stat-label">Endangered Species on IUCN Red List</div>
+        </div>
+        <div class="stat-card" style="--delay: 0.1s">
+          <div class="stat-number" data-target="150">0</div>
+          <div class="stat-label">Species Extinct Daily (Estimate)</div>
+        </div>
+        <div class="stat-card" style="--delay: 0.2s">
+          <div class="stat-number" data-target="1864">0</div>
+          <div class="stat-label">Wild Giant Panda Population</div>
+        </div>
+        <div class="stat-card" style="--delay: 0.3s">
+          <div class="stat-number" data-target="98">0</div>
+          <div class="stat-label">
+            Improvement Rate of Protected Species in China (98%)
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="animals" class="animals-section">
+      <div class="container">
+        <h2 class="section-title">Endangered Animals Profiles</h2>
+        <p class="section-subtitle">
+          Understanding them is the first step to protecting them
+        </p>
+
+        <div class="animal-featured" id="featured-panda">
+          <div class="animal-image-container">
+            <img
+              src="https://images6.alphacoders.com/101/1017260.jpg?q=85&w=1200&auto=format&fit=crop"
+              alt="Giant Panda"
+              class="animal-image"
+              loading="eager"
+              onerror="this.src='https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=1200&q=95&auto=format&fit=crop'"
+            />
+          </div>
+          <div class="animal-info">
+            <h3 class="animal-name">🐼 Giant Panda</h3>
+            <p class="animal-scientific">Ailuropoda melanoleuca</p>
+            <div class="animal-details">
+              <div class="detail-item">
+                <strong>Habitat:</strong> Bamboo forests in Sichuan, Shaanxi,
+                and Gansu provinces of China, at elevations of 2600-3500 meters
+              </div>
+              <div class="detail-item">
+                <strong>Habits:</strong> Pandas are solitary animals that
+                primarily feed on bamboo, consuming 12-38 kg daily. They have
+                gentle temperaments, move slowly, and serve as flagship species.
+              </div>
+              <div class="detail-item">
+                <strong>Conservation Status:</strong> Vulnerable (VU). After
+                years of conservation efforts, the wild giant panda population
+                has steadily increased, with significant achievements in
+                protection work.
+              </div>
+              <div class="detail-item">
+                <strong>Threats:</strong> Habitat fragmentation, climate change
+                affecting bamboo supply, and human disturbance.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="animals-grid">
+          <div
+            class="animal-card"
+            data-animal="South China Tiger"
+            style="--delay: 0s"
+          >
+            <div class="card-image">
+              <img
+                src="https://www.torontozoo.com/img/1200/20190415034848388SumTigerHKLowRes7.jpg"
+                alt="South China Tiger"
+                loading="lazy"
+                onerror="this.src='https://www.torontozoo.com/img/1200/20190415034848388SumTigerHKLowRes7.jpg'"
+              />
+            </div>
+            <div class="card-content">
+              <h4><span class="animal-emoji">🐅</span>South China Tiger</h4>
+              <p class="scientific">Panthera tigris amoyensis</p>
+              <p class="habitat">Habitat: Southern China</p>
+              <p class="description">
+                Tiger subspecies endemic to China, functionally extinct in the
+                wild, representing a major challenge in endangered species
+                conservation.
+              </p>
+              <button
+                class="card-btn"
+                onclick="showAnimalDetails('South China Tiger')"
+              >
+                View Details
+              </button>
+            </div>
+          </div>
+
+          <div
+            class="animal-card"
+            data-animal="Crested Ibis"
+            style="--delay: 0.1s"
+          >
+            <div class="card-image">
+              <img
+                src="https://video.cgtn.com/news/3d3d774d30517a4d32457a6333566d54/video/4467e7328bc440b683e5fd4a7c5d4045/4467e7328bc440b683e5fd4a7c5d4045.jpg"
+                alt="Crested Ibis"
+                loading="lazy"
+                onerror="this.src='https://video.cgtn.com/news/3d3d774d30517a4d32457a6333566d54/video/4467e7328bc440b683e5fd4a7c5d4045/4467e7328bc440b683e5fd4a7c5d4045.jpg'"
+              />
+            </div>
+            <div class="card-content">
+              <h4><span class="animal-emoji">🦩</span>Crested Ibis</h4>
+              <p class="scientific">Nipponia nippon</p>
+              <p class="habitat">
+                Habitat: Shaanxi, Henan and other areas in China
+              </p>
+              <p class="description">
+                Known as the "Oriental Gem", its population has recovered to
+                several thousand through conservation efforts, making it a
+                typical success story.
+              </p>
+              <button
+                class="card-btn"
+                onclick="showAnimalDetails('Crested Ibis')"
+              >
+                View Details
+              </button>
+            </div>
+          </div>
+
+          <div
+            class="animal-card"
+            data-animal="Yangtze Finless Porpoise"
+            style="--delay: 0.2s"
+          >
+            <div class="card-image">
+              <img
+                src="http://hbrbapp.hubeidaily.net/68c3bf67-74d2-4b5d-b462-1a2b39ff3b90?q=80&w=800&auto=format&fit=crop"
+                alt="Yangtze Finless Porpoise"
+                loading="lazy"
+                onerror="this.src='http://hbrbapp.hubeidaily.net/68c3bf67-74d2-4b5d-b462-1a2b39ff3b90?w=800&q=90&auto=format&fit=crop'"
+              />
+            </div>
+            <div class="card-content">
+              <h4>
+                <span class="animal-emoji">🐬</span>Yangtze Finless Porpoise
+              </h4>
+              <p class="scientific">Neophocaena asiaeorientalis</p>
+              <p class="habitat">
+                Habitat: Middle and lower reaches of the Yangtze River
+              </p>
+              <p class="description">
+                Freshwater porpoise endemic to the Yangtze, known as the "Panda
+                of the Water", facing severe survival threats and in urgent need
+                of aquatic ecosystem improvement.
+              </p>
+              <button
+                class="card-btn"
+                onclick="showAnimalDetails('Yangtze Finless Porpoise')"
+              >
+                View Details
+              </button>
+            </div>
+          </div>
+
+          <div
+            class="animal-card"
+            data-animal="Snow Leopard"
+            style="--delay: 0.3s"
+          >
+            <div class="card-image">
+              <img
+                src="https://img.freepik.com/premium-photo/enchanting-snow-leopard-stalking-himalayan-mountains_863558-1404.jpg"
+                alt="Snow Leopard"
+                loading="lazy"
+                onerror="this.src='https://img.freepik.com/premium-photo/enchanting-snow-leopard-stalking-himalayan-mountains_863558-1404.jpg'"
+              />
+            </div>
+            <div class="card-content">
+              <h4><span class="animal-emoji">🐆</span>Snow Leopard</h4>
+              <p class="scientific">Panthera uncia</p>
+              <p class="habitat">
+                Habitat: Qinghai-Tibet Plateau and surrounding high mountains
+              </p>
+              <p class="description">
+                Top predator in high-altitude regions, adapted to extreme
+                environments, known as the "King of the Snow Mountains".
+              </p>
+              <button
+                class="card-btn"
+                onclick="showAnimalDetails('Snow Leopard')"
+              >
+                View Details
+              </button>
+            </div>
+          </div>
+
+          <div
+            class="animal-card"
+            data-animal="Golden Snub-nosed Monkey"
+            style="--delay: 0.4s"
+          >
+            <div class="card-image">
+              <img
+                src="https://bkimg.cdn.bcebos.com/pic/4034970a304e251f95ca8448eec9de177f3e6709f566"
+                alt="Golden Snub-nosed Monkey"
+                loading="lazy"
+                onerror="this.src='https://bkimg.cdn.bcebos.com/pic/4034970a304e251f95ca8448eec9de177f3e6709f566'"
+              />
+            </div>
+            <div class="card-content">
+              <h4>
+                <span class="animal-emoji">🐒</span>Golden Snub-nosed Monkey
+              </h4>
+              <p class="scientific">Rhinopithecus roxellana</p>
+              <p class="habitat">Habitat: Sichuan, Shaanxi, Hubei, Gansu</p>
+              <p class="description">
+                Famous for its beautiful golden fur, lives in high-altitude
+                forests and is a typical arboreal animal.
+              </p>
+              <button
+                class="card-btn"
+                onclick="showAnimalDetails('Golden Snub-nosed Monkey')"
+              >
+                View Details
+              </button>
+            </div>
+          </div>
+
+          <div
+            class="animal-card"
+            data-animal="Chinese Pangolin"
+            style="--delay: 0.5s"
+          >
+            <div class="card-image">
+              <img
+                src="https://tse1.mm.bing.net/th/id/OIP.jpPZxCFet01pTaCx7dQlYAHaEM?cb=ucfimg2ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3"
+                alt="Chinese Pangolin"
+                loading="lazy"
+                onerror="this.src='https://tse1.mm.bing.net/th/id/OIP.jpPZxCFet01pTaCx7dQlYAHaEM?cb=ucfimg2ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3'"
+              />
+            </div>
+            <div class="card-content">
+              <h4><span class="animal-emoji">🦔</span>Chinese Pangolin</h4>
+              <p class="scientific">Manis pentadactyla</p>
+              <p class="habitat">Habitat: Forests in Southern China</p>
+              <p class="description">
+                The world's only scaly mammal, critically endangered due to
+                illegal poaching and habitat loss.
+              </p>
+              <button
+                class="card-btn"
+                onclick="showAnimalDetails('Chinese Pangolin')"
+              >
+                View Details
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="protection" class="protection-section">
+      <div class="container">
+        <h2 class="section-title">
+          Why is Protecting Endangered Animals Crucial?
+        </h2>
+        <div class="reasons-grid">
+          <div class="reason-card" style="--delay: 0s">
+            <div class="reason-icon">🌿</div>
+            <h3>Maintaining Ecological Balance</h3>
+            <p>
+              Every species has a unique role in the ecosystem. Losing one
+              species can trigger chain reactions, affecting the stability of
+              the entire ecosystem.
+            </p>
+          </div>
+          <div class="reason-card" style="--delay: 0.1s">
+            <div class="reason-icon">🧬</div>
+            <h3>Biodiversity</h3>
+            <p>
+              Rich biodiversity is a reflection of Earth's vitality and the
+              foundation of human survival and development. Protecting
+              biodiversity means protecting humanity's future.
+            </p>
+          </div>
+          <div class="reason-card" style="--delay: 0.2s">
+            <div class="reason-icon">⚖️</div>
+            <h3>Moral and Ethical Responsibility</h3>
+            <p>
+              As the dominant species on Earth, humans have a responsibility to
+              protect the survival rights of other species and maintain the
+              beautiful vision of harmonious coexistence between humans and
+              nature.
+            </p>
+          </div>
+          <div class="reason-card" style="--delay: 0.3s">
+            <div class="reason-icon">💊</div>
+            <h3>Biomedical Value</h3>
+            <p>
+              Many endangered animals may contain genes and compounds of
+              significant value for treating human diseases. Protecting them
+              means protecting future medical resources.
+            </p>
+          </div>
+          <div class="reason-card" style="--delay: 0.4s">
+            <div class="reason-icon">🏔️</div>
+            <h3>Environmental Health Indicators</h3>
+            <p>
+              The survival status of rare animals serves as a barometer of
+              environmental health. Protecting them is essentially improving and
+              safeguarding our own living environment.
+            </p>
+          </div>
+          <div class="reason-card" style="--delay: 0.5s">
+            <div class="reason-icon">🔬</div>
+            <h3>Scientific Research Value</h3>
+            <p>
+              Endangered animals provide us with unique research opportunities,
+              helping us understand life evolution, adaptation mechanisms, and
+              ecosystem operation patterns.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="action" class="action-section">
+      <div class="container">
+        <h2 class="section-title">Let's Take Action</h2>
+        <p class="section-subtitle">
+          Everyone can contribute to protecting endangered animals
+        </p>
+
+        <div class="actions-grid">
+          <div class="action-item" style="--delay: 0s">
+            <div class="action-number">01</div>
+            <h3>Raise Conservation Awareness</h3>
+            <p>
+              Learn about endangered animals, understand their survival status,
+              and promote conservation concepts to those around you.
+            </p>
+          </div>
+          <div class="action-item" style="--delay: 0.1s">
+            <div class="action-number">02</div>
+            <h3>Support Conservation Organizations</h3>
+            <p>
+              Participate in or fund professional animal conservation
+              organizations and support their research and conservation work.
+            </p>
+          </div>
+          <div class="action-item" style="--delay: 0.2s">
+            <div class="action-number">03</div>
+            <h3>Reject Illegal Trade</h3>
+            <p>
+              Don't buy or use wildlife products, and report illegal wildlife
+              trading activities.
+            </p>
+          </div>
+          <div class="action-item" style="--delay: 0.3s">
+            <div class="action-number">04</div>
+            <h3>Protect Habitats</h3>
+            <p>
+              Reduce damage to natural environments, support ecological
+              restoration projects, and provide good living spaces for animals.
+            </p>
+          </div>
+          <div class="action-item" style="--delay: 0.4s">
+            <div class="action-number">05</div>
+            <h3>Practice Green Living</h3>
+            <p>
+              Save energy and reduce emissions, minimize pollution, start with
+              small things in daily life, and reduce impact on the natural
+              environment.
+            </p>
+          </div>
+          <div class="action-item" style="--delay: 0.5s">
+            <div class="action-number">06</div>
+            <h3>Participate in Volunteer Services</h3>
+            <p>
+              Join volunteer activities related to wildlife conservation and
+              personally participate in conservation work.
+            </p>
+          </div>
+        </div>
+
+        <div class="pledge-box">
+          <h3>Make Your Conservation Pledge</h3>
+          <p>
+            Let's pledge together to contribute our efforts to protecting
+            endangered animals!
+          </p>
+          <button class="pledge-button" onclick="showPledgeForm()">
+            Sign the Pledge
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div class="container">
+        <p>
+          &copy; <span id="current-year"></span>
+          Endangered Animals Conservation Initiative | Let's protect every life on Earth together
+        </p>
+        <div class="footer-links">
+          <a href="#home">Back to Top</a>
+        </div>
+      </div>
+    </footer>
+
+    <div id="animalModal" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="closeModal()">&times;</span>
+        <div id="modalBody"></div>
+      </div>
+    </div>
+
+    <script>
+      document.getElementById("current-year").textContent =
+        new Date().getFullYear();
+        
+      const menuToggle = document.querySelector(".menu-toggle");
+      const navMenu = document.querySelector(".nav-menu");
+
+      function toggleMenu() {
+        menuToggle.classList.toggle("active");
+        navMenu.classList.toggle("active");
+      }
+
+      function closeMenu() {
+        if (navMenu.classList.contains("active")) {
+          menuToggle.classList.remove("active");
+          navMenu.classList.remove("active");
+        }
+      }
+
+      function scrollToSection(id) {
+        const section = document.getElementById(id);
+        if (section) {
+          const navbarHeight = document.querySelector(".navbar").offsetHeight;
+          window.scrollTo({
+            top: section.offsetTop - navbarHeight,
+            behavior: "smooth",
+          });
+        }
+      }
+
+      document.querySelectorAll(".nav-menu a").forEach((anchor) => {
+        anchor.addEventListener("click", function (e) {
+          e.preventDefault();
+          const targetId = this.getAttribute("href").substring(1);
+          scrollToSection(targetId);
+        });
+      });
+
+      const stats = document.querySelectorAll(".stat-card");
+      let statAnimationStarted = false;
+
+      function animateCount(statElement) {
+        const statNumberElement = statElement.querySelector(".stat-number");
+        const target = +statNumberElement.getAttribute("data-target");
+        const duration = 2000;
+        const start = 0;
+        let startTime = null;
+
+        function step(timestamp) {
+          if (!startTime) startTime = timestamp;
+          const progress = timestamp - startTime;
+          const percentage = Math.min(progress / duration, 1);
+          const value = Math.floor(percentage * (target - start) + start);
+          statNumberElement.innerText = value.toLocaleString(); // 添加千位分隔符
+
+          if (percentage < 1) {
+            window.requestAnimationFrame(step);
+          } else {
+            statNumberElement.innerText = target.toLocaleString();
+          }
+        }
+
+        window.requestAnimationFrame(step);
+      }
+
+      const options = {
+        root: null,
+        rootMargin: "0px",
+        threshold: 0.1,
+      };
+
+      const observer = new IntersectionObserver((entries, observer) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const target = entry.target;
+            target.classList.add("visible");
+
+            if (
+              target.classList.contains("stat-card") &&
+              !statAnimationStarted
+            ) {
+              stats.forEach(animateCount);
+              statAnimationStarted = true;
+            }
+
+            if (
+              target.id === "featured-panda" ||
+              target.classList.contains("stat-card")
+            ) {
+              observer.unobserve(target);
+            }
+          }
+        });
+      }, options);
+
+      document.getElementById("featured-panda").classList.add("animate-target");
+      document
+        .querySelectorAll(".animals-grid .animal-card")
+        .forEach((card) => card.classList.add("animate-target"));
+      document
+        .querySelectorAll(".reasons-grid .reason-card")
+        .forEach((card) => card.classList.add("animate-target"));
+      document
+        .querySelectorAll(".actions-grid .action-item")
+        .forEach((item) => item.classList.add("animate-target"));
+
+      document.querySelectorAll(".animate-target, .stat-card").forEach((el) => {
+        observer.observe(el);
+      });
+
+      const animalModal = document.getElementById("animalModal");
+      const modalBody = document.getElementById("modalBody");
+      const animalData = {
+        "South China Tiger": {
+          emoji: "🐅",
+          title: "South China Tiger",
+          scientific: "Panthera tigris amoyensis",
+          content:
+            "<p><strong>Conservation Status:</strong> Critically Endangered (CR), functionally extinct in the wild. Rarely seen in their natural habitat. Reintroduction training and habitat restoration are the only hope.</p><p><strong>Threats:</strong> Complete habitat loss, scarce prey, and poaching. Urgent need for large-scale habitat restoration programs.</p><p><strong>Conservation Measures:</strong> Captive breeding management, reintroduction training, establishing large nature reserves for habitat restoration.</p>",
+        },
+        "Crested Ibis": {
+          emoji: "🦩",
+          title: "Crested Ibis",
+          scientific: "Nipponia nippon",
+          content:
+            "<p><strong>Conservation Status:</strong> Near Threatened (NT). Population has increased from 7 individuals at discovery to several thousand, making it one of the miracles of global biodiversity conservation.</p><p><strong>Threats:</strong> Pesticide use, habitat destruction and pollution leading to food shortages. Extremely high requirements for environmental quality.</p><p><strong>Conservation Measures:</strong> Establishing release bases, strictly protecting core habitats and breeding grounds, enhancing environmental monitoring.</p>",
+        },
+        "Yangtze Finless Porpoise": {
+          emoji: "🐬",
+          title: "Yangtze Finless Porpoise",
+          scientific: "Neophocaena asiaeorientalis",
+          content:
+            "<p><strong>Conservation Status:</strong> Critically Endangered (CR). Currently only about 1,000 individuals remain, considered the most endangered freshwater cetacean globally, with extremely high extinction risk.</p><p><strong>Threats:</strong> Water pollution, overfishing, busy shipping traffic. Underwater noise pollution seriously interferes with their survival.</p><p><strong>Conservation Measures:</strong> Ten-year fishing ban on the Yangtze, establishing multiple ex-situ conservation reserves (such as Tian ezhou), strengthening aquatic ecosystem restoration and waterway management.</p>",
+        },
+        "Snow Leopard": {
+          emoji: "🐆",
+          title: "Snow Leopard",
+          scientific: "Panthera uncia",
+          content:
+            "<p><strong>Conservation Status:</strong> Vulnerable (VU). Only a few thousand remain globally, serving as a flagship species for high mountain ecosystems, whose health reflects the integrity of alpine ecology.</p><p><strong>Threats:</strong> Climate change, human-livestock conflicts, illegal poaching. Global warming causes their habitat to shrink.</p><p><strong>Conservation Measures:</strong> Cross-border cooperation in protection, monitoring population numbers, conducting community education and anti-poaching campaigns, resolving human-wildlife conflicts.</p>",
+        },
+        "Golden Snub-nosed Monkey": {
+          emoji: "🐒",
+          title: "Golden Snub-nosed Monkey",
+          scientific: "Rhinopithecus roxellana",
+          content:
+            "<p><strong>Conservation Status:</strong> Vulnerable (VU). Population is relatively stable, but habitats are fragmented, affecting gene exchange.</p><p><strong>Threats:</strong> Habitat fragmentation and food chain disruption caused by deforestation. Road construction also exacerbates habitat isolation.</p><p><strong>Conservation Measures:</strong> Establishing nature reserves, conducting long-term ecological monitoring, building ecological corridors to connect fragmented habitats.</p>",
+        },
+        "Chinese Pangolin": {
+          emoji: "🦔",
+          title: "Chinese Pangolin",
+          scientific: "Manis pentadactyla",
+          content:
+            "<p><strong>Conservation Status:</strong> Critically Endangered (CR). One of the most illegally hunted mammals globally, with populations declining sharply.</p><p><strong>Threats:</strong> Illegal poaching for traditional medicine use and habitat loss. Their scales are mistakenly believed to have medicinal value.</p><p><strong>Conservation Measures:</strong> Upgraded to national first-class protected animal status, cracking down on illegal trade, conducting habitat patrols and population recovery projects.</p>",
+        },
+      };
+
+      function showAnimalDetails(animalName) {
+        closeMenu();
+        const data = animalData[animalName];
+        if (data) {
+          modalBody.innerHTML = `
+                  <h2 class="section-title" style="margin-top: 1rem; color: var(--primary-color);">${data.emoji} ${data.title}</h2>
+                  <p class="section-subtitle">${data.scientific}</p>
+                  <div class="detail-item" style="border-left: none; padding-left: 0;">${data.content}</div>
+                  <button class="pledge-button" onclick="showPledgeForm()" style="margin-top: 2rem;">Sign the Pledge</button>
+              `;
+          animalModal.style.display = "flex";
+        }
+      }
+
+      function showPledgeForm() {
+        closeMenu();
+        modalBody.innerHTML = `
+              <h2 class="section-title" style="margin-top: 1rem; color: var(--primary-color);">Sign the Conservation Pledge</h2>
+              <p class="section-subtitle">Your commitment will be a significant force for conservation!</p>
+              <form id="pledgeForm" onsubmit="handlePledgeSubmit(event)">
+                  <input type="text" id="name" placeholder="Your name or nickname" required>
+                  <input type="email" id="email" placeholder="Your email (optional)">
+                  <textarea id="pledgeText" placeholder="Write your conservation declaration/pledge (e.g., I pledge to refuse to buy any wildlife products starting today!)" required></textarea>
+                  <button type="submit" class="submit-btn">I Pledge! Join the Conservation Effort</button>
+              </form>
+          `;
+        animalModal.style.display = "flex";
+      }
+
+      function closeModal() {
+        animalModal.style.display = "none";
+        modalBody.innerHTML = "";
+      }
+
+      function handlePledgeSubmit(event) {
+        event.preventDefault();
+        const name =
+          document.getElementById("name").value || "Conservation Enthusiast";
+        const pledgeText = document.getElementById("pledgeText").value;
+
+        modalBody.innerHTML = `
+              <h2 class="section-title" style="color: var(--secondary-color); margin-top: 1rem;">Thank You for Your Pledge! 🎉</h2>
+              <p class="section-subtitle"><strong>${name}</strong>, your conservation declaration has been recorded:</p>
+              <blockquote style="background: var(--bg-light); padding: 1.5rem; border-left: 5px solid var(--secondary-color); margin: 2rem 0; font-style: italic; font-size: 1.1rem; border-radius: 8px;">"${pledgeText}"</blockquote>
+              <p style="text-align: center; font-size: 1.1rem; color: var(--text-dark);">Let's work together to protect endangered animals and build a better home for all!</p>
+              <button class="cta-button" onclick="closeModal()" style="margin-top: 2rem;">Close Window</button>
+          `;
+      }
+
+      window.onclick = function (event) {
+        if (event.target == animalModal) {
+          closeModal();
+        }
+      };
+    </script>
+  </body>
+</html>
