@@ -65,7 +65,7 @@ ENV ARGO_DOMAIN="" \
     NZ_CLIENT_SECRET="" \
     NZ_UUID="" \
     NZ_TLS="" \
-    DASHBOARD_VERSION="" 
+    AGENT_VERSION="" 
 
 # 复制脚本和静态文件
 COPY restore.sh /restore.sh

@@ -23,5 +23,4 @@ applications:
       # === 可选 ===
       # NZ_CLIENT_SECRET: ""
       # NZ_TLS: "true"
-      # DASHBOARD_VERSION: latest
-      # PROJECT_URL: ""   # CF 不需要保活，留空即可
+      # AGENT_VERSION: latest

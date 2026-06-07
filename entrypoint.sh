@@ -8,7 +8,7 @@ ARGO_AUTH=${ARGO_AUTH:-""}
 NZ_UUID=${NZ_UUID:-""}
 NZ_CLIENT_SECRET=${NZ_CLIENT_SECRET:-""}
 NZ_TLS=${NZ_TLS:-true}
-DASHBOARD_VERSION=${DASHBOARD_VERSION:-latest}
+AGENT_VERSION=${AGENT_VERSION:-latest}
 
 GH_REPO_OWNER=${GH_REPO_OWNER:-""}
 GH_REPO_NAME=${GH_REPO_NAME:-""}
@@ -212,19 +212,19 @@ case $arch in
         ;;
 esac
 
-if [ -z "$DASHBOARD_VERSION" ] || [ "$DASHBOARD_VERSION" = "latest" ]; then
-    DASHBOARD_VERSION=$(curl -s https://api.github.com/repos/nezhahq/agent/releases/latest \
+if [ -z "$AGENT_VERSION" ] || [ "$AGENT_VERSION" = "latest" ]; then
+    AGENT_VERSION=$(curl -s https://api.github.com/repos/nezhahq/agent/releases/latest \
         | grep '"tag_name":' | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
-    if [ -z "$DASHBOARD_VERSION" ]; then
+    if [ -z "$AGENT_VERSION" ]; then
         log_error "获取最新版本失败"
         exit 1
     fi
-    log_info "使用最新版本: $DASHBOARD_VERSION"
+    log_info "使用最新版本: $AGENT_VERSION"
 else
-    log_info "使用指定版本: $DASHBOARD_VERSION"
+    log_info "使用指定版本: $AGENT_VERSION"
 fi
 
-URL="https://github.com/nezhahq/agent/releases/download/${DASHBOARD_VERSION}/${fileagent}"
+URL="https://github.com/nezhahq/agent/releases/download/${AGENT_VERSION}/${fileagent}"
 log_info "下载地址: $URL"
 
 wget -q "$URL" -O "$fileagent"

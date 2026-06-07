@@ -109,7 +109,7 @@
 | `DISK`              | `1024M`                             | CF 磁盘配额                  |
 | `NZ_CLIENT_SECRET`  | 自动生成                            | 留空即可，恢复备份后保留旧值 |
 | `NZ_TLS`            | `true`                              | 探针 TLS 开关                |
-| `DASHBOARD_VERSION` | `latest`                            | 探针版本                     |
+| `AGENT_VERSION`     | `latest`                            | 探针版本                     |
 | `BACKUP_HOUR`       | `4`                                 | 自动备份时段（北京时间）     |
 
 ---
