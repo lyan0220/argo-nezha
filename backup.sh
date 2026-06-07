@@ -52,12 +52,34 @@ trap cleanup EXIT
 echo "[INFO] 复制数据..."
 cp -R "$DATA_DIR" "$TEMP_DIR/data"
 
+# 用 SQLite 在线备份命令重写 sqlite.db
+if [ -f "$DATA_DIR/sqlite.db" ]; then
+    echo "[INFO] 生成 SQLite 一致性快照..."
+    sqlite3 "$DATA_DIR/sqlite.db" ".backup '$TEMP_DIR/data/sqlite.db'" \
+        || echo "[WARN] .backup 失败，回退使用 cp 拷贝的副本"
+fi
+
 # 清理 SQLite 历史表（可选，减小备份大小）
 if [ -f "$TEMP_DIR/data/sqlite.db" ]; then
     echo "[INFO] 清理 SQLite 历史数据..."
-    sqlite3 "$TEMP_DIR/data/sqlite.db" "DELETE FROM service_histories WHERE created_at < datetime('now', '-30 days');" 2>/dev/null || true
-    sqlite3 "$TEMP_DIR/data/sqlite.db" "DELETE FROM transfers WHERE created_at < datetime('now', '-30 days');" 2>/dev/null
-    sqlite3 "$TEMP_DIR/data/sqlite.db" "VACUUM;" 2>/dev/null || true
+
+    sqlite3 "$TEMP_DIR/data/sqlite.db" <<'EOF'
+.bail off
+BEGIN;
+DELETE FROM service_histories WHERE created_at < datetime('now', 'localtime', '-30 days');
+DELETE FROM transfers WHERE created_at < datetime('now', 'localtime', '-30 days');
+COMMIT;
+EOF
+    delete_rc=$?
+
+    if [ "$delete_rc" -eq 0 ]; then
+        echo "[INFO] 清理完成，执行 VACUUM..."
+        sqlite3 "$TEMP_DIR/data/sqlite.db" "VACUUM;" \
+            || echo "[WARN] VACUUM 失败（可能 /tmp 空间不足），跳过但备份继续"
+    else
+        # 表不存在等情况会落到这里；事务已回滚，安全的语句也不会半落库
+        echo "[WARN] 清理出现错误（rc=$delete_rc），跳过 VACUUM 继续备份"
+    fi
 fi
 
 # 删除不需要备份的文件

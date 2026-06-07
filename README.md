@@ -1,126 +1,129 @@
 # ⭐ 哪吒面板 V1 · SAP Cloud Foundry 部署方案
 
-> **安全提示**：本方案未使用 OAuth 登录，**首次登录后必须立即修改默认密码**。
+> ⚠️ **安全提示**：本方案未使用 OAuth 登录，**首次登录后必须立即修改默认密码**（默认 `admin/admin`）。
 
-- **SAP Cloud Foundry**（推荐）：通过 GitHub Actions 一键部署到任意 SAP CF 区域
+通过 GitHub Actions 一键部署到 SAP CF，使用 Cloudflare Tunnel 安全访问，每天自动备份到 GitHub。
 
----
-
-## 🏗️ 架构
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                         容器内部                                  │
-│                                                                   │
-│   ┌─────────────┐   $PORT       ┌──────────────────┐             │
-│   │ CF gorouter │ ────────────▶ │ nginx (main.conf)│ → index.html │
-│   │             │   /health     │                  │   /health    │
-│   └─────────────┘               └──────────────────┘              │
-│                                                                   │
-│   ┌──────────────────┐  443    ┌──────────────┐  8443   ┌──────┐  │
-│   │ Cloudflare Edge  │ ──out─▶ │ cloudflared  │ ──────▶ │      │  │
-│   │ (ARGO_DOMAIN)    │ tunnel  │              │  TLS    │nginx │  │
-│   └──────────────────┘         └──────────────┘         │ ssl  │  │
-│                                                          └──┬───┘  │
-│                                                  8008       │      │
-│                                            ┌─────────────◀──┘      │
-│                                            │  哪吒面板 (app)        │
-│                                            └─────────────┐          │
-│                                                          │          │
-│   ┌──────────────────┐                                   │          │
-│   │  nezha-agent     │ ──── 探针上报到 ARGO_DOMAIN:443 ──┘          │
-│   │  (容器内)        │                                              │
-│   └──────────────────┘                                              │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-**两条独立的入口**：
+**两条独立入口**
 
 - 平台分配的 URL（`$PORT`）→ 伪装页 + 健康检查
 - Cloudflare Tunnel（`ARGO_DOMAIN`）→ 真实的哪吒面板
 
 ---
 
-## 📋 环境变量
+## 一、准备工作
 
-| 变量名              | 示例值              | 必填 | 说明                                                                    |
-| ------------------- | ------------------- | ---- | ----------------------------------------------------------------------- |
-| `ARGO_AUTH`         | `eyJhIjoi.......`   | ✅   | Cloudflare Tunnel Token                                                 |
-| `ARGO_DOMAIN`       | `nezha.example.com` | ✅   | 面板访问域名，同时用于探针上报                                          |
-| `NZ_UUID`           | `f8ff434...62e0`    | ✅   | 探针 UUID，[uuidgenerator.net](https://www.uuidgenerator.net/) 在线生成 |
-| `GH_TOKEN`          | `ghp_xxxxxxxx`      | ✅   | GitHub PAT，用于配置自动备份                                            |
-| `GH_REPO_OWNER`     | `your_username`     | ✅   | 备份仓库所有者                                                          |
-| `GH_REPO_NAME`      | `nezha-backup`      | ✅   | 备份仓库名                                                              |
-| `GH_BRANCH`         | `main`              | ✅   | 备份分支                                                                |
-| `ZIP_PASSWORD`      | `change-me`         | ✅   | 备份压缩包密码                                                          |
-| `NZ_CLIENT_SECRET`  | `kDerKi...mvj0XMy`  | ❌   | 留空自动生成（备份恢复后会保留旧值）                                    |
-| `NZ_TLS`            | `true`              | ❌   | 探针 TLS 开关，默认 `true`                                              |
-| `DASHBOARD_VERSION` | `v1.14.1`           | ❌   | 探针版本，默认 `latest`                                                 |
-| `PORT`              | 由平台注入          | -    | CF 自动注入；本地默认 8080                                              |
+| 平台       | 用途                         |
+| ---------- | ---------------------------- |
+| GitHub     | 存放代码、构建镜像、备份数据 |
+| Cloudflare | 提供域名和安全隧道           |
+| SAP BTP    | 运行容器（CF 免费区即可）    |
+
+### 1.1 创建 GitHub 备份仓库
+
+新建一个 **Private** 仓库（如 `nezha-backup`），勾选 **Add a README file**。
+
+### 1.2 生成 GitHub Token
+
+**Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic)**：
+
+- Expiration：**No expiration**
+- 权限：
+  - ✅ `repo`（**必选**，备份脚本读写备份仓库需要）
+
+> Token 只显示一次，立刻复制保存。格式：`ghp_xxxxxxxxxxxx`
+
+### 1.3 注册 SAP BTP Cloud Foundry
+
+注册 Trial 账号 → 创建 Subaccount 启用 Cloud Foundry → 创建 Space（任意名称）。记下登录邮箱和密码。工作流会自动选第一个 org/space，无需手动配置。
 
 ---
 
-## 🔧 Cloudflare Tunnel 配置
+## 二、Fork 并构建镜像
 
-1. **开启 gRPC**：Cloudflare 控制台 → Network → 启用 gRPC
-2. **创建 Tunnel** 并获取 Token（即 `ARGO_AUTH`）
-3. **Public Hostname** 配置：
+1. **Fork** 本仓库到自己的账号
+2. **Actions** → 启用 workflows → 运行 **🐳 构建自己的镜像吧**（镜像名 `argo-nezha`，标签 `latest`）
+3. 构建完成后进入 **Packages → argo-nezha → Package settings**，将可见性改为 **Public**
 
-| 配置项 | 值                       |
-| ------ | ------------------------ |
-| Type   | `HTTPS`                  |
-| URL    | `https://localhost:8443` |
+> ⚠️ GHCR 包必须是 public，否则 SAP CF 拉不到镜像。
 
-**TLS 设置**：
+镜像地址：`ghcr.io/<你的用户名>/argo-nezha:latest`
+
+---
+
+## 三、配置 Cloudflare Tunnel
+
+### 3.1 创建 Tunnel 并获取 Token
+
+**Zero Trust → Networks → Tunnels → Create a tunnel → Cloudflared** → 复制 `eyJ` 开头的 Token，这就是 `ARGO_AUTH`。
+
+### 3.2 配置 Public Hostname
+
+| 配置项    | 值                       |
+| --------- | ------------------------ |
+| Subdomain | 自定义（如 `nezha`）     |
+| Domain    | 选择你的域名             |
+| Type      | `HTTPS`                  |
+| URL       | `https://localhost:8443` |
+
+展开 **TLS** 设置：
 
 - ✅ `No TLS Verify`
 - ✅ `HTTP2 connection`
 
-> ⚠️ URL 必须是 `localhost:8443`，不是 443。这是 SAP CF 非 root 容器的硬约束 —— 详见架构图里 cloudflared → nginx 的端口约定。
+> ⚠️ URL 必须是 `localhost:8443`，**不是 443**。SAP CF 容器以非 root 运行，无法监听 < 1024 端口。
+
+完整域名（如 `nezha.example.com`）就是 `ARGO_DOMAIN`。
+
+### 3.3 开启 gRPC
+
+回到主面板 → 点击你的域名 → **Network** → 开启 **gRPC**。
 
 ---
 
-## 🚀 SAP Cloud Foundry 部署（推荐）
+## 四、配置 GitHub Secrets
 
-### 1. Fork 本仓库
+仓库 **Settings → Secrets and variables → Actions** 添加：
 
-### 2. 构建镜像
+### 必填
 
-进入 **Actions** → 启用 workflows → 运行 **🐳 构建自己的镜像吧**：
+| Secret          | 说明                                                                |
+| --------------- | ------------------------------------------------------------------- |
+| `EMAIL`         | SAP BTP 登录邮箱                                                    |
+| `PASSWORD`      | SAP BTP 登录密码                                                    |
+| `ARGO_AUTH`     | Cloudflare Tunnel Token（步骤 3.1）                                 |
+| `ARGO_DOMAIN`   | 面板域名（步骤 3.2），同时用于探针上报                              |
+| `NZ_UUID`       | 探针 UUID，[uuidgenerator.net](https://www.uuidgenerator.net/) 生成 |
+| `GH_TOKEN`      | GitHub PAT（步骤 1.2）                                              |
+| `GH_REPO_OWNER` | 备份仓库所有者                                                      |
+| `GH_REPO_NAME`  | 备份仓库名称                                                        |
+| `ZIP_PASSWORD`  | 备份压缩包密码（自定义任意字符串）                                  |
 
-- 镜像名：`argo-nezha`（保持默认）
-- 标签：`latest`
+### 可选
 
-构建完成后镜像地址为 `ghcr.io/<你的用户名>/argo-nezha:latest`。
+| Secret              | 默认值                              | 说明                         |
+| ------------------- | ----------------------------------- | ---------------------------- |
+| `GH_BRANCH`         | `main`                              | 备份分支                     |
+| `DOCKER_IMAGE`      | `ghcr.io/<owner>/argo-nezha:latest` | 自定义镜像地址               |
+| `MEMORY`            | `512M`                              | CF 内存配额                  |
+| `DISK`              | `1024M`                             | CF 磁盘配额                  |
+| `NZ_CLIENT_SECRET`  | 自动生成                            | 留空即可，恢复备份后保留旧值 |
+| `NZ_TLS`            | `true`                              | 探针 TLS 开关                |
+| `DASHBOARD_VERSION` | `latest`                            | 探针版本                     |
+| `BACKUP_HOUR`       | `4`                                 | 自动备份时段（北京时间）     |
 
-> 如果是私有 GHCR 包，请到 **Packages** 页面把可见性改成 public，否则 SAP CF 拉不到镜像。
+---
 
-### 3. 配置 Secrets
+## 五、部署到 SAP CF
 
-在仓库 **Settings → Secrets and variables → Actions** 添加：
+**Actions → 自动部署 nezha 面板到 SAP → Run workflow**：
 
-| Secret                                                         | 必填 | 说明                                           |
-| -------------------------------------------------------------- | ---- | ---------------------------------------------- |
-| `EMAIL` / `PASSWORD`                                           | ✅   | SAP BTP 账号                                   |
-| `ARGO_DOMAIN` / `ARGO_AUTH` / `NZ_UUID`                        | ✅   | 面板与隧道                                     |
-| `GH_TOKEN` / `GH_REPO_OWNER` / `GH_REPO_NAME` / `ZIP_PASSWORD` | ✅   | 备份配置                                       |
-| `GH_BRANCH`                                                    | ⭕   | 默认 `main`                                    |
-| `DOCKER_IMAGE`                                                 | ⭕   | 不填则使用 `ghcr.io/<owner>/argo-nezha:latest` |
-| `MEMORY` / `DISK`                                              | ⭕   | 默认 `512M` / `1024M`                          |
-| `NZ_CLIENT_SECRET` / `NZ_TLS` / `DASHBOARD_VERSION`            | ⭕   | 见上表                                         |
+- **region**：推荐 `US(free)` 或 `SG(free)`
+- **app_name**：留空自动生成
 
-### 4. 触发部署
+工作流会自动执行：登录 CF → 选择第一个 org/space → `cf push` → 设置环境变量 → `cf restage`。
 
-进入 **Actions → 自动部署 nezha 面板到 SAP**：
-
-- 选择目标区域（如 `US(free)`）
-- 应用名留空则自动生成
-
-工作流会自动执行：登录 CF → 选择第一个 org/space → push 镜像 → 设置环境变量 → restage。
-
-### 5. 访问面板
-
-部署日志最后会输出：
+部署日志末尾输出：
 
 ```
 伪装页 URL: https://<app-name>.cfapps.<region>.hana.ondemand.com
@@ -131,53 +134,24 @@
 
 ---
 
-## 💾 备份与恢复
+## 六、首次登录
 
-### 自动备份
-
-默认每天凌晨 4 点（北京时间）。`BACKUP_HOUR` 环境变量可改时段。
-
-### 手动触发
-
-1. 打开备份仓库的 `README.md`
-2. 内容**全部替换**为单词 `backup`
-3. 提交后等待最多 1 小时（守护进程每小时轮询一次）
-
-### 自动恢复
-
-容器启动时会自动从备份仓库拉取最新的 `data-*.zip` 解压恢复。无需手动操作。
+1. 打开 `https://<ARGO_DOMAIN>`，使用 `admin / admin` 登录
+2. **立即修改密码**
 
 ---
 
-## 📁 项目文件
+## 七、备份与恢复
 
-```
-.
-├── .github/workflows/
-│   ├── Packages.yml                        # 构建并推送镜像到 GHCR
-│   └── 自动部署Nezha面板.yml                # 一键部署到 SAP CF
-├── Dockerfile                              # 镜像定义
-├── entrypoint.sh                           # 容器启动脚本
-├── main.conf.template                      # nginx 主配置（监听 $PORT，envsubst 渲染）
-├── ssl.conf.template                       # nginx SSL 配置（监听 8443）
-├── manifest.yml                            # CF 部署描述（备用，工作流不依赖）
-├── backup.sh                               # 备份脚本
-├── restore.sh                              # 恢复脚本
-├── index.html                              # 伪装页面（建议替换）
-├── README.md                               # 本文档
-└── 详细部署流程.md                          # 保姆级新手教程
-```
+- **自动备份**：默认每天凌晨 4 点（北京时间），文件名 `data-YYYY-MM-DD-HHMMSS.zip`
+- **手动触发**：把备份仓库的 `README.md` 内容**全部替换**为单词 `backup`，提交后等待最多 1 小时
+- **自动恢复**：容器启动时自动拉取最新备份解压恢复，无需手动操作
 
-| 文件                 | 用途                               | 备注                                                                 |
-| -------------------- | ---------------------------------- | -------------------------------------------------------------------- |
-| `main.conf.template` | 监听 `$PORT`，提供 `/health` 端点  | 启动时由 envsubst 渲染                                               |
-| `ssl.conf.template`  | 监听 `8443`，承接 cloudflared 流量 | 8443 是非特权端口，避开 SAP CF 非 root 限制                          |
-| `manifest.yml`       | CF 应用描述                        | 仅作参考，GitHub Actions 工作流通过 `cf push` 命令行参数完成同等配置 |
-| `index.html`         | 伪装页                             | 建议用 AI 生成自定义内容，隐藏真实身份                               |
+> 手动触发的 `README.md` 内容必须**只有** `backup` 6 个字符，不含空格/换行/其他字符。
 
 ---
 
-## 🔍 端口说明
+## 八、架构与端口
 
 | 端口               | 谁在用                                   | 公网          |
 | ------------------ | ---------------------------------------- | ------------- |
@@ -190,19 +164,46 @@
 
 ---
 
-## 🛟 常见问题
+## 九、项目文件
 
-| 问题                                      | 解决办法                                                              |
-| ----------------------------------------- | --------------------------------------------------------------------- |
-| 部署失败：`bind() to 0.0.0.0:443 failed`  | 确认 `ssl.conf.template` 是 8443，未被改回 443                        |
-| Cloudflare Tunnel 显示 connection refused | 检查 Tunnel 后台 URL 是 `https://localhost:8443`                      |
-| 健康检查超时                              | 工作流已设置 `-t 180`；如仍超时检查 GHCR 镜像是否 public              |
-| 探针离线                                  | 检查 Cloudflare 已开启 gRPC，且 TLS 设置勾选了 No TLS Verify          |
-| 手动备份没触发                            | 备份仓库的 `README.md` 内容必须**仅有** `backup`（不含其他字符）      |
-| 重启后数据丢失                            | 检查 `GH_TOKEN`/`GH_REPO_*` 是否正确，能否在备份仓库看到 `data-*.zip` |
+```
+.
+├── .github/workflows/
+│   ├── Packages.yml                   # 构建并推送镜像到 GHCR
+│   └── 自动部署Nezha面板.yml          # 一键部署到 SAP CF
+├── Dockerfile                         # 镜像定义
+├── entrypoint.sh                      # 容器启动脚本
+├── main.conf.template                 # nginx 主配置（监听 $PORT，envsubst 渲染）
+├── ssl.conf.template                  # nginx SSL 配置（监听 8443）
+├── manifest.yml                       # CF 部署描述（备用，工作流不依赖）
+├── backup.sh / restore.sh             # 备份与恢复脚本
+├── index.html                         # 伪装页面（建议替换）
+└── README.md                          # 本文档
+```
+
+> `index.html` 建议用 AI 生成自定义内容。
 
 ---
 
-## ⭐ 觉得有用就点个 Star 吧
+## 十、常见问题
+
+| 问题                                          | 解决办法                                                          |
+| --------------------------------------------- | ----------------------------------------------------------------- |
+| `cf push` 报 image not found                  | GHCR 镜像没改 public（见步骤二）                                  |
+| 部署失败：`bind() to 0.0.0.0:443 failed`      | `ssl.conf.template` 被改回 443，应保持 8443                       |
+| Cloudflare Tunnel 显示 502/connection refused | Tunnel URL 必须是 `https://localhost:8443`                        |
+| 健康检查超时                                  | 工作流已设 `-t 180`；首次拉镜像稍慢，仍超时则检查 GHCR 镜像可见性 |
+| 面板打开但探针离线                            | Cloudflare 网络未开启 gRPC，或 Tunnel TLS 未勾选 No TLS Verify    |
+| 手动备份没触发                                | `README.md` 内容必须**仅有** `backup`（不含其他字符）             |
+| 重启后数据丢失                                | 检查 `GH_TOKEN` / `GH_REPO_*`，确认备份仓库有 `data-*.zip`        |
+| 工作流报名称冲突                              | 改用自定义 `app_name`，或等几分钟让旧应用清理                     |
+
+---
+
+## 🔑 三个关键点
+
+1. **GHCR 镜像必须是 public**
+2. **Cloudflare Tunnel URL 必须是 `https://localhost:8443`**
+3. **首次登录立即改密码**
 
 _祝部署顺利！_ 🎉
