@@ -100,21 +100,42 @@ log_info "启动 crond"
 crond
 
 # =========================
-# 步骤 3.5: 生成面板配置（首次部署）
+# 步骤 3.5: 校准面板 secret 与 UUID（每次启动都跑）
+# 优先级: NZ_CLIENT_SECRET (env) > 备份中的值 > 随机生成
 # =========================
-if [ "$RESTORE_SUCCESS" = "false" ]; then
-    echo "=========================================="
-    echo " 步骤 3.5: 生成面板配置（首次部署）"
-    echo "=========================================="
-    
-    mkdir -p /dashboard/data
+echo "=========================================="
+echo " 步骤 3.5: 校准面板 secret"
+echo "=========================================="
+
+mkdir -p /dashboard/data
+
+# 提取备份中已有的 secret（去掉可能的引号和空白）
+BACKUP_SECRET=""
+if [ -f /dashboard/data/config.yaml ]; then
+    BACKUP_SECRET=$(sed -n 's/^agent_secret_key:[[:space:]]*//p' /dashboard/data/config.yaml \
+        | head -n1 | sed 's/^["'\'']//;s/["'\''][[:space:]]*$//;s/[[:space:]]*$//')
+fi
+
+if [ -n "$NZ_CLIENT_SECRET" ]; then
+    EFFECTIVE_SECRET="$NZ_CLIENT_SECRET"
+    SECRET_SOURCE="环境变量 NZ_CLIENT_SECRET"
+elif [ -n "$BACKUP_SECRET" ]; then
+    EFFECTIVE_SECRET="$BACKUP_SECRET"
+    SECRET_SOURCE="备份 config.yaml"
+else
+    EFFECTIVE_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+    SECRET_SOURCE="随机生成"
+fi
+log_info "agent_secret_key 来源: $SECRET_SOURCE"
+
+NZ_UUID=${NZ_UUID:-$(cat /proc/sys/kernel/random/uuid)}
+
+if [ ! -f /dashboard/data/config.yaml ]; then
+    # 首次部署：生成完整面板配置
     JWT_SECRET=$(head -c 512 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 512)
-    NZ_CLIENT_SECRET=${NZ_CLIENT_SECRET:-$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)}
-    NZ_UUID=${NZ_UUID:-$(cat /proc/sys/kernel/random/uuid)}
-    
     cat > /dashboard/data/config.yaml <<EOF
 admin_template: admin-dist
-agent_secret_key: $NZ_CLIENT_SECRET
+agent_secret_key: $EFFECTIVE_SECRET
 avg_ping_count: 2
 cover: 1
 https: {}
@@ -129,9 +150,13 @@ tls: ${NZ_TLS:-true}
 user_template: user-dist
 EOF
     log_ok "面板配置已生成"
-    log_info "NZ_UUID=$NZ_UUID"
-    log_info "NZ_CLIENT_SECRET=$NZ_CLIENT_SECRET"
+elif [ -n "$NZ_CLIENT_SECRET" ] && [ "$BACKUP_SECRET" != "$NZ_CLIENT_SECRET" ]; then
+    # 已有配置 + env 显式设置且与备份不同 → 强制覆盖
+    log_info "用 NZ_CLIENT_SECRET 覆盖备份中的 agent_secret_key"
+    sed -i "s|^agent_secret_key:.*|agent_secret_key: $EFFECTIVE_SECRET|" /dashboard/data/config.yaml
 fi
+
+log_info "NZ_UUID=$NZ_UUID"
 
 # =========================
 # 步骤 4: 启动面板
@@ -249,14 +274,11 @@ if [ -n "$ARGO_DOMAIN" ]; then
     log_info "等待隧道建立"
     sleep 5
     
-    # 从面板配置读取 agent_secret_key
-    AGENT_SECRET=$(grep '^agent_secret_key:' /dashboard/data/config.yaml | awk '{print $2}')
-    
-    # 如果备份恢复，NZ_UUID 可能为空，尝试使用环境变量或生成新的
-    NZ_UUID=${NZ_UUID:-$(cat /proc/sys/kernel/random/uuid)}
-    
+    # secret 由步骤 3.5 已校准好，直接使用 EFFECTIVE_SECRET
+    AGENT_SECRET="$EFFECTIVE_SECRET"
+
     if [ -z "$AGENT_SECRET" ]; then
-        log_error "无法获取 agent_secret_key"
+        log_error "EFFECTIVE_SECRET 为空，跳过探针启动"
     else
         cat > /dashboard/config.yml <<EOF
 client_secret: $AGENT_SECRET
