@@ -82,9 +82,19 @@ EOF
     fi
 fi
 
+# 复制探针配置（如果存在；不存在不影响备份）
+if [ -f /dashboard/config.yml ]; then
+    echo "[INFO] 包含探针配置: /dashboard/config.yml"
+    cp /dashboard/config.yml "$TEMP_DIR/config.yml"
+fi
+
 # 压缩备份（使用密码加密）
 echo "[INFO] 压缩数据（加密）..."
-zip -r -6 -P "$ZIP_PASSWORD" "$BACKUP_FILE" data/ >/dev/null 2>&1
+if [ -f "$TEMP_DIR/config.yml" ]; then
+    zip -r -6 -P "$ZIP_PASSWORD" "$BACKUP_FILE" data/ config.yml >/dev/null 2>&1
+else
+    zip -r -6 -P "$ZIP_PASSWORD" "$BACKUP_FILE" data/ >/dev/null 2>&1
+fi
 
 if [ ! -f "$BACKUP_FILE" ]; then
     echo "[ERROR] 压缩失败"

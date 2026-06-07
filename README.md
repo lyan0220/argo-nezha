@@ -83,34 +83,27 @@
 
 ## 四、配置 GitHub Secrets
 
-仓库 **Settings → Secrets and variables → Actions** 添加：
+仓库 **Settings → Secrets and variables → Actions** 添加。
 
-### 必填
-
-| Secret          | 说明                                                                |
-| --------------- | ------------------------------------------------------------------- |
-| `EMAIL`         | SAP BTP 登录邮箱                                                    |
-| `PASSWORD`      | SAP BTP 登录密码                                                    |
-| `ARGO_AUTH`     | Cloudflare Tunnel Token（步骤 3.1）                                 |
-| `ARGO_DOMAIN`   | 面板域名（步骤 3.2），同时用于探针上报                              |
-| `NZ_UUID`       | 探针 UUID，[uuidgenerator.net](https://www.uuidgenerator.net/) 生成 |
-| `GH_TOKEN`      | GitHub PAT（步骤 1.2）                                              |
-| `GH_REPO_OWNER` | 备份仓库所有者                                                      |
-| `GH_REPO_NAME`  | 备份仓库名称                                                        |
-| `ZIP_PASSWORD`  | 备份压缩包密码（自定义任意字符串）                                  |
-
-### 可选
-
-| Secret              | 默认值                              | 说明                         |
-| ------------------- | ----------------------------------- | ---------------------------- |
-| `GH_BRANCH`         | `main`                              | 备份分支                     |
-| `DOCKER_IMAGE`      | `ghcr.io/<owner>/argo-nezha:latest` | 自定义镜像地址               |
-| `MEMORY`            | `512M`                              | CF 内存配额                  |
-| `DISK`              | `1024M`                             | CF 磁盘配额                  |
-| `NZ_CLIENT_SECRET`  | 自动生成                            | 留空即可，恢复备份后保留旧值 |
-| `NZ_TLS`            | `true`                              | 探针 TLS 开关                |
-| `AGENT_VERSION`     | `latest`                            | 探针版本                     |
-| `BACKUP_HOUR`       | `4`                                 | 自动备份时段（北京时间）     |
+| Secret             | 必填情况 | 默认值                              | 说明                                                                             |
+| ------------------ | -------- | ----------------------------------- | -------------------------------------------------------------------------------- |
+| `EMAIL`            | ✅ 必填  | -                                   | SAP BTP 登录邮箱                                                                 |
+| `PASSWORD`         | ✅ 必填  | -                                   | SAP BTP 登录密码                                                                 |
+| `ARGO_AUTH`        | ✅ 必填  | -                                   | Cloudflare Tunnel Token（步骤 3.1）                                              |
+| `ARGO_DOMAIN`      | ✅ 必填  | -                                   | 面板域名（步骤 3.2），同时是探针上报地址                                         |
+| `GH_TOKEN`         | ✅ 必填  | -                                   | GitHub PAT（步骤 1.2）                                                           |
+| `GH_REPO_OWNER`    | ✅ 必填  | -                                   | 备份仓库所有者                                                                   |
+| `GH_REPO_NAME`     | ✅ 必填  | -                                   | 备份仓库名称                                                                     |
+| `ZIP_PASSWORD`     | ✅ 必填  | -                                   | 备份压缩包密码（自定义任意字符串）                                               |
+| `NZ_UUID`          | ⬜ 可选  | -                                   | ⚠️ 全新部署且需要容器内探针上线时填                                              |
+| `NZ_CLIENT_SECRET` | ⬜ 可选  | 自动生成 / 备份值                   | 首次部署留空 → 随机生成；恢复留空 → 沿用备份值；显式设置 → 覆盖面板与探针 secret |
+| `NZ_TLS`           | ⬜ 可选  | `true`                              | 探针 TLS 开关                                                                    |
+| `AGENT_VERSION`    | ⬜ 可选  | `latest`                            | 探针版本（`nezhahq/agent` 仓库的 tag）                                           |
+| `BACKUP_HOUR`      | ⬜ 可选  | `4`                                 | 自动备份时段（北京时间，0-23）                                                   |
+| `GH_BRANCH`        | ⬜ 可选  | `main`                              | 备份分支                                                                         |
+| `DOCKER_IMAGE`     | ⬜ 可选  | `ghcr.io/<owner>/argo-nezha:latest` | 自定义镜像地址                                                                   |
+| `MEMORY`           | ⬜ 可选  | `512M`                              | CF 内存配额                                                                      |
+| `DISK`             | ⬜ 可选  | `1024M`                             | CF 磁盘配额                                                                      |
 
 ---
 
@@ -148,6 +141,16 @@
 - **自动恢复**：容器启动时自动拉取最新备份解压恢复，无需手动操作
 
 > 手动触发的 `README.md` 内容必须**只有** `backup` 6 个字符，不含空格/换行/其他字符。
+
+**备份内容**：
+
+```
+data-YYYY-MM-DD-HHMMSS.zip
+├── data/         面板数据目录（sqlite.db、config.yaml 等）
+└── config.yml    探针配置（如存在；含 client_secret 与 uuid）
+```
+
+> 备份包含探针配置后，恢复时容器内探针 `uuid` 不会漂移，面板不会把它当成新机器重复添加；`NZ_UUID` 变量仅在**全新部署**时需要。
 
 ---
 
@@ -194,6 +197,7 @@
 | Cloudflare Tunnel 显示 502/connection refused | Tunnel URL 必须是 `https://localhost:8443`                        |
 | 健康检查超时                                  | 工作流已设 `-t 180`；首次拉镜像稍慢，仍超时则检查 GHCR 镜像可见性 |
 | 面板打开但探针离线                            | Cloudflare 网络未开启 gRPC，或 Tunnel TLS 未勾选 No TLS Verify    |
+| 全新部署后服务器列表无容器内探针              | `NZ_UUID` 未设置（全新部署需要；从备份恢复时不需要）              |
 | 手动备份没触发                                | `README.md` 内容必须**仅有** `backup`（不含其他字符）             |
 | 重启后数据丢失                                | 检查 `GH_TOKEN` / `GH_REPO_*`，确认备份仓库有 `data-*.zip`        |
 | 工作流报名称冲突                              | 改用自定义 `app_name`，或等几分钟让旧应用清理                     |

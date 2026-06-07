@@ -100,42 +100,21 @@ log_info "启动 crond"
 crond
 
 # =========================
-# 步骤 3.5: 校准面板 secret 与 UUID（每次启动都跑）
-# 优先级: NZ_CLIENT_SECRET (env) > 备份中的值 > 随机生成
+# 步骤 3.5: 首次部署时生成面板配置
 # =========================
-echo "=========================================="
-echo " 步骤 3.5: 校准面板 secret"
-echo "=========================================="
-
 mkdir -p /dashboard/data
 
-# 提取备份中已有的 secret（去掉可能的引号和空白）
-BACKUP_SECRET=""
-if [ -f /dashboard/data/config.yaml ]; then
-    BACKUP_SECRET=$(sed -n 's/^agent_secret_key:[[:space:]]*//p' /dashboard/data/config.yaml \
-        | head -n1 | sed 's/^["'\'']//;s/["'\''][[:space:]]*$//;s/[[:space:]]*$//')
-fi
-
-if [ -n "$NZ_CLIENT_SECRET" ]; then
-    EFFECTIVE_SECRET="$NZ_CLIENT_SECRET"
-    SECRET_SOURCE="环境变量 NZ_CLIENT_SECRET"
-elif [ -n "$BACKUP_SECRET" ]; then
-    EFFECTIVE_SECRET="$BACKUP_SECRET"
-    SECRET_SOURCE="备份 config.yaml"
-else
-    EFFECTIVE_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
-    SECRET_SOURCE="随机生成"
-fi
-log_info "agent_secret_key 来源: $SECRET_SOURCE"
-
-NZ_UUID=${NZ_UUID:-$(cat /proc/sys/kernel/random/uuid)}
-
 if [ ! -f /dashboard/data/config.yaml ]; then
-    # 首次部署：生成完整面板配置
+    echo "==========================================" 
+    echo " 步骤 3.5: 生成面板配置（首次部署）"
+    echo "=========================================="
+
     JWT_SECRET=$(head -c 512 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 512)
+    NZ_CLIENT_SECRET=${NZ_CLIENT_SECRET:-$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)}
+
     cat > /dashboard/data/config.yaml <<EOF
 admin_template: admin-dist
-agent_secret_key: $EFFECTIVE_SECRET
+agent_secret_key: $NZ_CLIENT_SECRET
 avg_ping_count: 2
 cover: 1
 https: {}
@@ -150,13 +129,12 @@ tls: ${NZ_TLS:-true}
 user_template: user-dist
 EOF
     log_ok "面板配置已生成"
-elif [ -n "$NZ_CLIENT_SECRET" ] && [ "$BACKUP_SECRET" != "$NZ_CLIENT_SECRET" ]; then
-    # 已有配置 + env 显式设置且与备份不同 → 强制覆盖
+    log_info "NZ_CLIENT_SECRET=$NZ_CLIENT_SECRET"
+elif [ -n "$NZ_CLIENT_SECRET" ]; then
+    # 恢复备份 • env 显式指定 secret → 强制覆盖面板配置
     log_info "用 NZ_CLIENT_SECRET 覆盖备份中的 agent_secret_key"
-    sed -i "s|^agent_secret_key:.*|agent_secret_key: $EFFECTIVE_SECRET|" /dashboard/data/config.yaml
+    sed -i "s|^agent_secret_key:.*|agent_secret_key: $NZ_CLIENT_SECRET|" /dashboard/data/config.yaml
 fi
-
-log_info "NZ_UUID=$NZ_UUID"
 
 # =========================
 # 步骤 4: 启动面板
@@ -265,23 +243,33 @@ log_ok "探针下载完成"
 
 # =========================
 # 步骤 8: 启动探针
+# 决策：恢复=用备份 config.yml; 全新+有UUID=新建; 全新+无UUID=跳过
 # =========================
 if [ -n "$ARGO_DOMAIN" ]; then
     echo "=========================================="
     echo " 步骤 8: 启动探针"
     echo "=========================================="
-    
+
     log_info "等待隧道建立"
     sleep 5
-    
-    # secret 由步骤 3.5 已校准好，直接使用 EFFECTIVE_SECRET
-    AGENT_SECRET="$EFFECTIVE_SECRET"
 
-    if [ -z "$AGENT_SECRET" ]; then
-        log_error "EFFECTIVE_SECRET 为空，跳过探针启动"
-    else
+    START_AGENT=false
+
+    if [ "$RESTORE_SUCCESS" = "true" ] && [ -f /dashboard/config.yml ]; then
+        # 恢复分支：直接用恢复来的探针 config.yml
+        # 仅在显式设置 NZ_CLIENT_SECRET 时覆盖 client_secret
+        if [ -n "$NZ_CLIENT_SECRET" ]; then
+            sed -i "s|^client_secret:.*|client_secret: $NZ_CLIENT_SECRET|" /dashboard/config.yml
+            log_info "用 NZ_CLIENT_SECRET 覆盖恢复后的 client_secret"
+        fi
+        AGENT_UUID=$(sed -n 's/^uuid:[[:space:]]*//p' /dashboard/config.yml | head -n1)
+        log_info "探针配置（恢复）: uuid=$AGENT_UUID"
+        START_AGENT=true
+    elif [ -n "$NZ_UUID" ]; then
+        # 全新部署 + 显式 UUID：生成新探针配置
+        # NZ_CLIENT_SECRET 在步骤 3.5 已确定（env 或随机生成）
         cat > /dashboard/config.yml <<EOF
-client_secret: $AGENT_SECRET
+client_secret: $NZ_CLIENT_SECRET
 debug: true
 disable_auto_update: true
 disable_command_execute: false
@@ -301,12 +289,15 @@ use_gitee_to_upgrade: false
 use_ipv6_country_code: false
 uuid: $NZ_UUID
 EOF
+        log_info "探针配置（新建）: uuid=$NZ_UUID"
+        START_AGENT=true
+    else
+        log_warn "未设置 NZ_UUID 且无备份，跳过探针启动"
+    fi
 
-        log_info "探针配置: server=$ARGO_DOMAIN:443, tls=$NZ_TLS, uuid=$NZ_UUID"
-        
+    if [ "$START_AGENT" = "true" ]; then
         ./nezha-agent -c /dashboard/config.yml >/dev/null 2>&1 &
         sleep 3
-        
         if pgrep -f "nezha-agent.*config.yml" >/dev/null; then
             log_ok "探针启动成功"
         else

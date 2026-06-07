@@ -119,6 +119,13 @@ echo "[INFO] 恢复数据到 $DATA_DIR..."
 mkdir -p "$DATA_DIR"
 cp -R "$TEMP_DIR/data/"* "$DATA_DIR/"
 
+# 恢复探针配置（如果备份中包含）
+if [ -f "$TEMP_DIR/config.yml" ]; then
+    echo "[INFO] 恢复探针配置到 /dashboard/config.yml"
+    cp "$TEMP_DIR/config.yml" /dashboard/config.yml
+    chmod 644 /dashboard/config.yml
+fi
+
 # 设置权限
 chown -R nobody:nogroup "$DATA_DIR" 2>/dev/null || true
 chmod -R 755 "$DATA_DIR"
