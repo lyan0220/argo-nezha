@@ -134,6 +134,14 @@ elif [ -n "$NZ_CLIENT_SECRET" ]; then
     # 恢复备份 • env 显式指定 secret → 强制覆盖面板配置
     log_info "用 NZ_CLIENT_SECRET 覆盖备份中的 agent_secret_key"
     sed -i "s|^agent_secret_key:.*|agent_secret_key: $NZ_CLIENT_SECRET|" /dashboard/data/config.yaml
+else
+    # 恢复备份 • 未显式指定 secret → 从面板配置读出，保证后续步骤 8 能拿到非空值
+    NZ_CLIENT_SECRET=$(sed -n 's/^agent_secret_key:[[:space:]]*//p' /dashboard/data/config.yaml | head -n1)
+    if [ -n "$NZ_CLIENT_SECRET" ]; then
+        log_info "从备份面板配置读取 agent_secret_key（用于探针）"
+    else
+        log_warn "备份面板配置中未读到 agent_secret_key"
+    fi
 fi
 
 # =========================
