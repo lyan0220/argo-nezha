@@ -258,7 +258,7 @@ if [ -n "$ARGO_DOMAIN" ]; then
     if [ -z "$AGENT_SECRET" ]; then
         log_error "无法获取 agent_secret_key"
     else
-        cat > /dashboard/config.yaml <<EOF
+        cat > /dashboard/config.yml <<EOF
 client_secret: $AGENT_SECRET
 debug: true
 disable_auto_update: true
@@ -282,10 +282,10 @@ EOF
 
         log_info "探针配置: server=$ARGO_DOMAIN:443, tls=$NZ_TLS, uuid=$NZ_UUID"
         
-        ./nezha-agent -c /dashboard/config.yaml >/dev/null 2>&1 &
+        ./nezha-agent -c /dashboard/config.yml >/dev/null 2>&1 &
         sleep 3
         
-        if pgrep -f "nezha-agent.*config.yaml" >/dev/null; then
+        if pgrep -f "nezha-agent.*config.yml" >/dev/null; then
             log_ok "探针启动成功"
         else
             log_error "探针启动失败"
@@ -382,8 +382,8 @@ while true; do
         log_warn "nginx 已重启"
     fi
 
-    if [ -n "$ARGO_DOMAIN" ] && [ -f /dashboard/config.yaml ] && ! pgrep -f "nezha-agent" >/dev/null; then
-        ./nezha-agent -c /dashboard/config.yaml >/dev/null 2>&1 &
+    if [ -n "$ARGO_DOMAIN" ] && [ -f /dashboard/config.yml ] && ! pgrep -f "nezha-agent" >/dev/null; then
+        ./nezha-agent -c /dashboard/config.yml >/dev/null 2>&1 &
         log_warn "探针已重启"
     fi
 

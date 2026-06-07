@@ -82,11 +82,6 @@ EOF
     fi
 fi
 
-# 删除不需要备份的文件
-rm -rf "$TEMP_DIR/data/upload" 2>/dev/null || true
-rm -f "$TEMP_DIR/data/*.log" 2>/dev/null || true
-rm -f "$TEMP_DIR/data/*.yaml" 2>/dev/null || true  # 探针配置文件不需要备份
-
 # 压缩备份（使用密码加密）
 echo "[INFO] 压缩数据（加密）..."
 zip -r -6 -P "$ZIP_PASSWORD" "$BACKUP_FILE" data/ >/dev/null 2>&1
