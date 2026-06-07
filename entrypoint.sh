@@ -243,7 +243,7 @@ log_ok "探针下载完成"
 
 # =========================
 # 步骤 8: 启动探针
-# 决策：恢复=用备份 config.yml; 全新+有UUID=新建; 全新+无UUID=跳过
+# 决策：有 NZ_UUID=用 NZ_UUID 新建（覆盖备份）; 无 NZ_UUID 但有恢复=沿用备份; 都没=跳过
 # =========================
 if [ -n "$ARGO_DOMAIN" ]; then
     echo "=========================================="
@@ -255,18 +255,8 @@ if [ -n "$ARGO_DOMAIN" ]; then
 
     START_AGENT=false
 
-    if [ "$RESTORE_SUCCESS" = "true" ] && [ -f /dashboard/config.yml ]; then
-        # 恢复分支：直接用恢复来的探针 config.yml
-        # 仅在显式设置 NZ_CLIENT_SECRET 时覆盖 client_secret
-        if [ -n "$NZ_CLIENT_SECRET" ]; then
-            sed -i "s|^client_secret:.*|client_secret: $NZ_CLIENT_SECRET|" /dashboard/config.yml
-            log_info "用 NZ_CLIENT_SECRET 覆盖恢复后的 client_secret"
-        fi
-        AGENT_UUID=$(sed -n 's/^uuid:[[:space:]]*//p' /dashboard/config.yml | head -n1)
-        log_info "探针配置（恢复）: uuid=$AGENT_UUID"
-        START_AGENT=true
-    elif [ -n "$NZ_UUID" ]; then
-        # 全新部署 + 显式 UUID：生成新探针配置
+    if [ -n "$NZ_UUID" ]; then
+        # NZ_UUID 优先：无论是否恢复，强制使用新 UUID 安装探针
         # NZ_CLIENT_SECRET 在步骤 3.5 已确定（env 或随机生成）
         cat > /dashboard/config.yml <<EOF
 client_secret: $NZ_CLIENT_SECRET
@@ -289,7 +279,16 @@ use_gitee_to_upgrade: false
 use_ipv6_country_code: false
 uuid: $NZ_UUID
 EOF
-        log_info "探针配置（新建）: uuid=$NZ_UUID"
+        log_info "探针配置（新建/覆盖）: uuid=$NZ_UUID"
+        START_AGENT=true
+    elif [ "$RESTORE_SUCCESS" = "true" ] && [ -f /dashboard/config.yml ]; then
+        # 未指定 NZ_UUID 且备份中有探针配置：沿用备份
+        if [ -n "$NZ_CLIENT_SECRET" ]; then
+            sed -i "s|^client_secret:.*|client_secret: $NZ_CLIENT_SECRET|" /dashboard/config.yml
+            log_info "用 NZ_CLIENT_SECRET 覆盖恢复后的 client_secret"
+        fi
+        AGENT_UUID=$(sed -n 's/^uuid:[[:space:]]*//p' /dashboard/config.yml | head -n1)
+        log_info "探针配置（恢复）: uuid=$AGENT_UUID"
         START_AGENT=true
     else
         log_warn "未设置 NZ_UUID 且无备份，跳过探针启动"
