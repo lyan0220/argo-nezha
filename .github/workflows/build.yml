@@ -1,4 +1,4 @@
-name: 构建自己的镜像
+name: Build and Push Docker Image
 
 on:
   workflow_dispatch:

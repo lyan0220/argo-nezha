@@ -1,6 +1,8 @@
 # ⭐ 哪吒面板 V1 · SAP Cloud Foundry 部署方案
 
-> ⚠️ **安全提示**：本方案未使用 OAuth 登录，**首次登录后必须立即修改默认密码**（默认 `admin/admin`）。
+> ⚠️ **安全提示**：本方案默认未启用 OAuth 登录，**首次登录后必须立即修改默认密码**（默认 `admin/admin`）。
+>
+> 如果在部署时提供 `GH_CLIENTID` 和 `GH_CLIENTSECRET`，入口脚本会在 `/dashboard/data/config.yaml` 中补写 GitHub OAuth 配置。
 
 通过 GitHub Actions 一键部署到 SAP CF，使用 Cloudflare Tunnel 安全访问，每天自动备份到 GitHub。
 
@@ -42,7 +44,7 @@
 ## 二、Fork 并构建镜像
 
 1. **Fork** 本仓库到自己的账号
-2. **Actions** → 启用 workflows → 运行 **🐳 构建自己的镜像吧**（镜像名 `argo-nezha`，标签 `latest`）
+2. **Actions** → 启用 workflows → 运行 **Build and Push Docker Image**（默认镜像名 `argo-nezha`，标签 `latest`）
 3. 构建完成后进入 **Packages → argo-nezha → Package settings**，将可见性改为 **Public**
 
 > ⚠️ GHCR 包必须是 public，否则 SAP CF 拉不到镜像。
@@ -81,33 +83,74 @@
 
 ---
 
-## 四、配置 GitHub Secrets
+## 四、（可选）配置 GitHub OAuth 登录
 
-仓库 **Settings → Secrets and variables → Actions** 添加。
+如果想启用 GitHub 账号登录哪吒面板，需要创建 GitHub OAuth App 并获取凭证。
 
-| Secret             | 必填情况 | 默认值                              | 说明                                                                             |
-| ------------------ | -------- | ----------------------------------- | -------------------------------------------------------------------------------- |
-| `EMAIL`            | ✅ 必填  | -                                   | SAP BTP 登录邮箱                                                                 |
-| `PASSWORD`         | ✅ 必填  | -                                   | SAP BTP 登录密码                                                                 |
-| `ARGO_AUTH`        | ✅ 必填  | -                                   | Cloudflare Tunnel Token（步骤 3.1）                                              |
-| `ARGO_DOMAIN`      | ✅ 必填  | -                                   | 面板域名（步骤 3.2），同时是探针上报地址                                         |
-| `GH_TOKEN`         | ✅ 必填  | -                                   | GitHub PAT（步骤 1.2）                                                           |
-| `GH_REPO_OWNER`    | ✅ 必填  | -                                   | 备份仓库所有者                                                                   |
-| `GH_REPO_NAME`     | ✅ 必填  | -                                   | 备份仓库名称                                                                     |
-| `ZIP_PASSWORD`     | ✅ 必填  | -                                   | 备份压缩包密码（自定义任意字符串）                                               |
-| `NZ_UUID`          | ⬜ 可选  | -                                   | 设置则强制用此 UUID 安装容器内探针（覆盖备份）；全新部署需要时填                  |
-| `NZ_CLIENT_SECRET` | ⬜ 可选  | 自动生成 / 备份值                   | 首次部署留空 → 随机生成；恢复留空 → 沿用备份值；显式设置 → 覆盖面板与探针 secret |
-| `NZ_TLS`           | ⬜ 可选  | `true`                              | 探针 TLS 开关                                                                    |
-| `AGENT_VERSION`    | ⬜ 可选  | `latest`                            | 探针版本（`nezhahq/agent` 仓库的 tag）                                           |
-| `BACKUP_HOUR`      | ⬜ 可选  | `4`                                 | 自动备份时段（北京时间，0-23）                                                   |
-| `GH_BRANCH`        | ⬜ 可选  | `main`                              | 备份分支                                                                         |
-| `DOCKER_IMAGE`     | ⬜ 可选  | `ghcr.io/<owner>/argo-nezha:latest` | 自定义镜像地址                                                                   |
-| `MEMORY`           | ⬜ 可选  | `512M`                              | CF 内存配额                                                                      |
-| `DISK`             | ⬜ 可选  | `1024M`                             | CF 磁盘配额                                                                      |
+### 4.1 创建 GitHub OAuth App
+
+1. 登录 GitHub 账号 → 打开 **Settings → Developer settings → OAuth Apps → New OAuth App**
+2. 填写应用信息：
+   - **Application name**：任意名称，如 `Nezha Panel`
+   - **Homepage URL**：`https://<ARGO_DOMAIN>`（你的面板域名）
+   - **Authorization callback URL**：`https://<ARGO_DOMAIN>/api/v1/oauth2/callback`
+   - **Application description**：可选
+
+3. 点击 **Register application**
+4. 记下 **Client ID**
+5. 点击 **Generate a new client secret**，记下生成的 **Client Secret**（只显示一次）
+
+> ⚠️ `Client Secret` 只显示一次，立刻复制保存。
+
+### 4.2 启用 OAuth 登录
+
+在部署时配置以下 Secrets（参考下一步"五、配置 GitHub Secrets"）：
+
+- `GH_CLIENTID`：从步骤 4.1 复制的 Client ID
+- `GH_CLIENTSECRET`：从步骤 4.1 复制的 Client Secret
+
+> 如果同时提供这两个变量，容器启动时会自动在 `/dashboard/data/config.yaml` 中写入 GitHub OAuth 配置，面板登录页将显示 **GitHub 登录**按钮。
 
 ---
 
-## 五、部署到 SAP CF
+## 五、配置 GitHub Secrets
+
+仓库 **Settings → Secrets and variables → Actions** 添加。
+
+### 5.1 必填变量
+
+| Secret          | 默认值 | 说明                                     |
+| --------------- | ------ | ---------------------------------------- |
+| `EMAIL`         | -      | SAP BTP 登录邮箱                         |
+| `PASSWORD`      | -      | SAP BTP 登录密码                         |
+| `ARGO_AUTH`     | -      | Cloudflare Tunnel Token（步骤 3.1）      |
+| `ARGO_DOMAIN`   | -      | 面板域名（步骤 3.2），同时是探针上报地址 |
+| `GH_TOKEN`      | -      | GitHub PAT（步骤 1.2）                   |
+| `GH_REPO_OWNER` | -      | 备份仓库所有者                           |
+| `GH_REPO_NAME`  | -      | 备份仓库名称                             |
+| `ZIP_PASSWORD`  | -      | 备份压缩包密码（自定义任意字符串）       |
+
+### 5.2 可选变量
+
+| Secret             | 默认值                              | 说明                                                                                 |
+| ------------------ | ----------------------------------- | ------------------------------------------------------------------------------------ |
+| `GH_CLIENTID`      | -                                   | GitHub OAuth App 的 Client ID，用于启用 GitHub 登录（需同时提供 `GH_CLIENTSECRET`）  |
+| `GH_CLIENTSECRET`  | -                                   | GitHub OAuth App 的 Client Secret，用于启用 GitHub 登录（需同时提供 `GH_CLIENTID`）  |
+| `NZ_UUID`          | -                                   | 设置则强制用此 UUID 安装容器内探针（覆盖备份）；全新部署需要时填                     |
+| `NZ_CLIENT_SECRET` | 自动生成 / 备份值                   | 首次部署留空 → 随机生成；恢复部署留空 → 沿用备份值；显式设置 → 覆盖面板与探针 secret |
+| `NZ_TLS`           | `true`                              | 探针 TLS 开关                                                                        |
+| `AGENT_VERSION`    | `latest`                            | 探针版本（`nezhahq/agent` 仓库的 tag）                                               |
+| `BACKUP_HOUR`      | `4`                                 | 自动备份时段（北京时间，0-23）                                                       |
+| `GH_BRANCH`        | `main`                              | 备份分支                                                                             |
+| `DOCKER_IMAGE`     | `ghcr.io/<owner>/argo-nezha:latest` | 自定义镜像地址                                                                       |
+| `MEMORY`           | `512M`                              | CF 内存配额                                                                          |
+| `DISK`             | `1024M`                             | CF 磁盘配额                                                                          |
+
+> **提示**：`GH_CLIENTID` 和 `GH_CLIENTSECRET` 必须同时提供，容器启动时会补写或覆盖 `/dashboard/data/config.yaml` 中的 `oauth2` 配置节点；否则继续保持当前非 OAuth 登录逻辑。
+
+---
+
+## 六、部署到 SAP CF
 
 **Actions → 自动部署 nezha 面板到 SAP → Run workflow**：
 
@@ -127,14 +170,14 @@
 
 ---
 
-## 六、首次登录
+## 七、首次登录
 
 1. 打开 `https://<ARGO_DOMAIN>`，使用 `admin / admin` 登录
 2. **立即修改密码**
 
 ---
 
-## 七、备份与恢复
+## 八、备份与恢复
 
 - **自动备份**：默认每天凌晨 4 点（北京时间），文件名 `data-YYYY-MM-DD-HHMMSS.zip`
 - **手动触发**：把备份仓库的 `README.md` 内容**全部替换**为单词 `backup`，提交后等待最多 1 小时
@@ -154,7 +197,7 @@ data-YYYY-MM-DD-HHMMSS.zip
 
 ---
 
-## 八、架构与端口
+## 九、架构与端口
 
 | 端口               | 谁在用                                   | 公网          |
 | ------------------ | ---------------------------------------- | ------------- |
@@ -167,13 +210,13 @@ data-YYYY-MM-DD-HHMMSS.zip
 
 ---
 
-## 九、项目文件
+## 十、项目文件
 
 ```
 .
 ├── .github/workflows/
-│   ├── Packages.yml                   # 构建并推送镜像到 GHCR
-│   └── 自动部署Nezha面板.yml          # 一键部署到 SAP CF
+│   ├── build.yml                      # 构建并推送镜像到 GHCR
+│   └── 自动部署Nezha面板.yml           # 一键部署到 SAP CF
 ├── Dockerfile                         # 镜像定义
 ├── entrypoint.sh                      # 容器启动脚本
 ├── main.conf.template                 # nginx 主配置（监听 $PORT，envsubst 渲染）
@@ -188,7 +231,7 @@ data-YYYY-MM-DD-HHMMSS.zip
 
 ---
 
-## 十、常见问题
+## 十一、常见问题
 
 | 问题                                          | 解决办法                                                          |
 | --------------------------------------------- | ----------------------------------------------------------------- |

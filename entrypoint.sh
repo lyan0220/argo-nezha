@@ -60,6 +60,31 @@ wait_for_port() {
     return 1
 }
 
+ensure_github_oauth() {
+  if [ -n "$GH_CLIENTID" ] && [ -n "$GH_CLIENTSECRET" ] && [ -f /dashboard/data/config.yaml ]; then
+    tmp_config=/dashboard/data/config.yaml.tmp
+    awk '
+      /^oauth2:/ {skip=1; next}
+      skip && /^[^[:space:]]/ {skip=0}
+      !skip {print}
+    ' /dashboard/data/config.yaml > "$tmp_config"
+    mv "$tmp_config" /dashboard/data/config.yaml
+
+    cat >> /dashboard/data/config.yaml <<EOF
+oauth2:
+  GitHub:
+    client_id: "$GH_CLIENTID"
+    client_secret: "$GH_CLIENTSECRET"
+    endpoint:
+      auth_url: "https://github.com/login/oauth/authorize"
+      token_url: "https://github.com/login/oauth/access_token"
+    user_info_url: "https://api.github.com/user"
+    user_id_path: "id"
+EOF
+    log_info "已写入 GitHub OAuth 配置"
+  fi
+}
+
 # =========================
 # 步骤 1: 启动 Nginx (健康检查端口 $PORT)
 # =========================
@@ -128,6 +153,7 @@ site_name: 哪吒监控
 tls: ${NZ_TLS:-true}
 user_template: user-dist
 EOF
+    ensure_github_oauth
     log_ok "面板配置已生成"
     log_info "NZ_CLIENT_SECRET=$NZ_CLIENT_SECRET"
 elif [ -n "$NZ_CLIENT_SECRET" ]; then
@@ -143,6 +169,7 @@ else
         log_warn "备份面板配置中未读到 agent_secret_key"
     fi
 fi
+ensure_github_oauth
 
 # =========================
 # 步骤 4: 启动面板
