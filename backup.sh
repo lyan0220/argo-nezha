@@ -1,9 +1,9 @@
 #!/bin/bash
-# scripts/backup.sh - Nezha 数据备份脚本
+# scripts/backup.sh - Nezha 数据备份脚本 (Releases 方案优化版)
 set -u
 
 ###########################################
-# Nezha 备份脚本
+# Nezha 备份脚本 - 附件上传版
 ###########################################
 
 # 必要变量检查
@@ -17,8 +17,17 @@ if [ -z "${ZIP_PASSWORD:-}" ]; then
     exit 0
 fi
 
+# 检查系统必要依赖
+for cmd in curl jq zip; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "[ERROR] 系统缺少必要命令: $cmd，请先安装"
+        exit 1
+    fi
+done
+
 # 配置
 DATA_DIR="${DATA_DIR:-/dashboard/data}"
+CONFIG_PATH="${CONFIG_PATH:-/dashboard/config.yml}"
 GH_BRANCH="${GH_BRANCH:-main}"
 KEEP_BACKUPS="${KEEP_BACKUPS:-5}"
 API_BASE="https://api.github.com/repos/$GH_REPO_OWNER/$GH_REPO_NAME"
@@ -26,69 +35,59 @@ TIMESTAMP=$(TZ='Asia/Shanghai' date +"%Y-%m-%d-%H%M%S")
 BACKUP_FILE="data-${TIMESTAMP}.zip"
 
 echo "=========================================="
-echo " Nezha 数据备份"
+echo " Nezha 数据备份 (Release模式)"
 echo "=========================================="
 echo "[INFO] 开始备份: $BACKUP_FILE"
 echo "[INFO] 数据目录: $DATA_DIR"
 
-# 检查数据目录
 if [ ! -d "$DATA_DIR" ]; then
     echo "[ERROR] 数据目录不存在: $DATA_DIR"
     exit 1
 fi
 
-# 临时目录
 TEMP_DIR="/tmp/nezha-backup-$$"
 mkdir -p "$TEMP_DIR"
 cd "$TEMP_DIR" || exit 1
 
-# 清理函数
 cleanup() {
     rm -rf "$TEMP_DIR"
 }
 trap cleanup EXIT
 
-# 复制数据
 echo "[INFO] 复制数据..."
 cp -R "$DATA_DIR" "$TEMP_DIR/data"
 
-# 用 SQLite 在线备份命令重写 sqlite.db
 if [ -f "$DATA_DIR/sqlite.db" ]; then
-    echo "[INFO] 生成 SQLite 一致性快照..."
-    sqlite3 "$DATA_DIR/sqlite.db" ".backup '$TEMP_DIR/data/sqlite.db'" \
-        || echo "[WARN] .backup 失败，回退使用 cp 拷贝的副本"
-fi
-
-# 清理 SQLite 历史表（可选，减小备份大小）
-if [ -f "$TEMP_DIR/data/sqlite.db" ]; then
-    echo "[INFO] 清理 SQLite 历史数据..."
-
-    sqlite3 "$TEMP_DIR/data/sqlite.db" <<'EOF'
+    if command -v sqlite3 >/dev/null 2>&1; then
+        echo "[INFO] 生成 SQLite 一致性快照..."
+        sqlite3 "$DATA_DIR/sqlite.db" ".backup '$TEMP_DIR/data/sqlite.db'" \
+            || echo "[WARN] .backup 失败，回退使用 cp 拷贝的副本"
+        
+        echo "[INFO] 清理 SQLite 历史数据..."
+        sqlite3 "$TEMP_DIR/data/sqlite.db" <<'EOF'
 .bail off
 BEGIN;
 DELETE FROM service_histories WHERE created_at < datetime('now', 'localtime', '-30 days');
 DELETE FROM transfers WHERE created_at < datetime('now', 'localtime', '-30 days');
 COMMIT;
 EOF
-    delete_rc=$?
+        delete_rc=$?
 
-    if [ "$delete_rc" -eq 0 ]; then
-        echo "[INFO] 清理完成，执行 VACUUM..."
-        sqlite3 "$TEMP_DIR/data/sqlite.db" "VACUUM;" \
-            || echo "[WARN] VACUUM 失败（可能 /tmp 空间不足），跳过但备份继续"
-    else
-        # 表不存在等情况会落到这里；事务已回滚，安全的语句也不会半落库
-        echo "[WARN] 清理出现错误（rc=$delete_rc），跳过 VACUUM 继续备份"
+        if [ "$delete_rc" -eq 0 ]; then
+            echo "[INFO] 清理完成，执行 VACUUM..."
+            sqlite3 "$TEMP_DIR/data/sqlite.db" "VACUUM;" \
+                || echo "[WARN] VACUUM 失败，跳过但备份继续"
+        else
+            echo "[WARN] 清理错误（rc=$delete_rc），跳过 VACUUM"
+        fi
     fi
 fi
 
-# 复制探针配置（如果存在；不存在不影响备份）
-if [ -f /dashboard/config.yml ]; then
-    echo "[INFO] 包含探针配置: /dashboard/config.yml"
-    cp /dashboard/config.yml "$TEMP_DIR/config.yml"
+if [ -f "$CONFIG_PATH" ]; then
+    echo "[INFO] 包含探针配置: $CONFIG_PATH"
+    cp "$CONFIG_PATH" "$TEMP_DIR/config.yml"
 fi
 
-# 压缩备份（使用密码加密）
 echo "[INFO] 压缩数据（加密）..."
 if [ -f "$TEMP_DIR/config.yml" ]; then
     zip -r -6 -P "$ZIP_PASSWORD" "$BACKUP_FILE" data/ config.yml >/dev/null 2>&1
@@ -104,65 +103,86 @@ fi
 BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
 echo "[INFO] 备份文件大小: $BACKUP_SIZE"
 
-# Base64 编码
-base64 -w 0 "$BACKUP_FILE" > content.b64 2>/dev/null || base64 "$BACKUP_FILE" > content.b64
+# ==========================================================
+# 1. 获取或创建 Release (固定标签 latest)
+# ==========================================================
+echo "[INFO] 检查/创建 Release 节点..."
+RELEASE_ID=$(curl -s -H "Authorization: token $GH_TOKEN" "$API_BASE/releases/tags/latest" | jq -r '.id // empty')
 
-# 检查大小限制
-B64_SIZE=$(wc -c < content.b64)
-echo "[INFO] Base64 大小: $((B64_SIZE / 1024 / 1024))MB"
-
-if [ "$B64_SIZE" -gt 100000000 ]; then
-    echo "[ERROR] 文件太大（>100MB），无法上传到 GitHub"
-    exit 1
+if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+    echo "[INFO] 未找到 latest 标签的 Release，正在创建..."
+    RELEASE_ID=$(curl -s -X POST \
+        -H "Authorization: token $GH_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{"tag_name":"latest","name":"Nezha Data Backups","body":"自动备份存放节点"}' \
+        "$API_BASE/releases" | jq -r '.id')
+    
+    if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+        echo "[ERROR] 创建 Release 失败"
+        exit 1
+    fi
 fi
 
-# 1. 上传备份文件
-echo "[INFO] 上传备份文件..."
-EXISTING_SHA=$(curl -s -H "Authorization: token $GH_TOKEN" \
-    "$API_BASE/contents/$BACKUP_FILE?ref=$GH_BRANCH" 2>/dev/null | jq -r '.sha // empty')
+# ==========================================================
+# 2. 上传备份文件作为附件 (二进制直传，省内存)
+# ==========================================================
+echo "[INFO] 上传备份文件到 Release 附件..."
+UPLOAD_URL="https://uploads.github.com/repos/$GH_REPO_OWNER/$GH_REPO_NAME/releases/$RELEASE_ID/assets?name=$BACKUP_FILE"
 
-if [ -n "$EXISTING_SHA" ]; then
-    jq -n --rawfile content content.b64 \
-        --arg msg "更新备份: $BACKUP_FILE" \
-        --arg sha "$EXISTING_SHA" \
-        --arg branch "$GH_BRANCH" \
-        '{message: $msg, content: $content, sha: $sha, branch: $branch}' > payload.json
-else
-    jq -n --rawfile content content.b64 \
-        --arg msg "备份: $BACKUP_FILE ($BACKUP_SIZE)" \
-        --arg branch "$GH_BRANCH" \
-        '{message: $msg, content: $content, branch: $branch}' > payload.json
-fi
-
-RESPONSE=$(curl -s -X PUT \
+UPLOAD_RESP=$(curl -s -X POST \
     -H "Authorization: token $GH_TOKEN" \
-    -H "Content-Type: application/json" \
-    -d @payload.json \
-    "$API_BASE/contents/$BACKUP_FILE")
+    -H "Content-Type: application/zip" \
+    --data-binary @"$BACKUP_FILE" \
+    "$UPLOAD_URL")
 
-rm -f payload.json content.b64
-
-if echo "$RESPONSE" | jq -e '.content.sha' >/dev/null 2>&1; then
-    echo "[SUCCESS] 备份文件已上传 ✓"
+if echo "$UPLOAD_RESP" | jq -e '.id' >/dev/null 2>&1; then
+    echo "[SUCCESS] 备份文件附件已上传 ✓"
 else
-    echo "[ERROR] 上传失败: $(echo "$RESPONSE" | jq -r '.message // "未知错误"')"
+    echo "[ERROR] 上传失败: $(echo "$UPLOAD_RESP" | jq -r '.message // "未知错误"')"
     exit 1
 fi
 
-# 2. 更新 README.md
+# ==========================================================
+# 3. 删除旧附件（仅保留设定的数量）
+# ==========================================================
+echo "[INFO] 清理旧备份附件（保留 ${KEEP_BACKUPS} 个）..."
+# 获取该 release 下所有 assets，按创建时间倒序排，跳过前 KEEP_BACKUPS 个
+OLD_ASSETS_JSON=$(curl -s -H "Authorization: token $GH_TOKEN" "$API_BASE/releases/$RELEASE_ID/assets" \
+    | jq -c "[sort_by(.created_at) | reverse | .[$KEEP_BACKUPS:] | .[] | {id: .id, name: .name}]")
+
+if [ "$OLD_ASSETS_JSON" != "[]" ] && [ "$OLD_ASSETS_JSON" != "null" ]; then
+    echo "$OLD_ASSETS_JSON" | jq -c '.[]' | while read -r asset; do
+        ASSET_ID=$(echo "$asset" | jq -r '.id')
+        ASSET_NAME=$(echo "$asset" | jq -r '.name')
+        echo "[INFO] 正在删除历史附件: $ASSET_NAME"
+        curl -s -X DELETE -H "Authorization: token $GH_TOKEN" "$API_BASE/releases/assets/$ASSET_ID" >/dev/null
+    done
+else
+    echo "[INFO] 没有需要清理的历史附件"
+fi
+
+# ==========================================================
+# 4. 更新 README.md
+# ==========================================================
 echo "[INFO] 更新 README.md..."
 README_SHA=$(curl -s -H "Authorization: token $GH_TOKEN" \
     "$API_BASE/contents/README.md?ref=$GH_BRANCH" | jq -r '.sha // empty')
+
+# 由于 base64 -w 0 某些系统不兼容，提供兜底
+b64_encode() {
+    base64 -w 0 2>/dev/null || base64
+}
 
 README_TEXT="# Nezha 数据备份
 
 ## 最新备份信息
 - **文件名**: \`$BACKUP_FILE\`
+- **存储位置**: Github [Releases 附件](../../releases/latest)
 - **备份时间**: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
 - **文件大小**: $BACKUP_SIZE
 
 ## 恢复说明
-设置环境变量后容器会自动恢复最新备份。
+设置环境变量后容器会自动获取最新的 Release 附件进行恢复。
 
 ## 手动触发备份
 将此文件内容修改为 \`backup\` 即可触发手动备份。
@@ -175,16 +195,16 @@ README_TEXT="# Nezha 数据备份
 - \`ZIP_PASSWORD\`: 备份密码
 "
 
-README_B64=$(echo -n "$README_TEXT" | base64 -w 0 2>/dev/null || echo -n "$README_TEXT" | base64)
+README_B64=$(echo -n "$README_TEXT" | b64_encode)
 
 if [ -n "$README_SHA" ]; then
-    jq -n --arg msg "更新README: $BACKUP_FILE" \
+    jq -n --arg msg "更新 README (Release模式): $BACKUP_FILE" \
         --arg content "$README_B64" \
         --arg sha "$README_SHA" \
         --arg branch "$GH_BRANCH" \
         '{message: $msg, content: $content, sha: $sha, branch: $branch}' > readme.json
 else
-    jq -n --arg msg "创建README" \
+    jq -n --arg msg "创建 README" \
         --arg content "$README_B64" \
         --arg branch "$GH_BRANCH" \
         '{message: $msg, content: $content, branch: $branch}' > readme.json
@@ -198,28 +218,6 @@ curl -s -X PUT \
 
 rm -f readme.json
 echo "[SUCCESS] README.md 已更新 ✓"
-
-# 3. 删除旧备份（仅在当前分支）
-echo "[INFO] 清理旧备份（保留 ${KEEP_BACKUPS} 个）..."
-OLD_BACKUPS=$(curl -s -H "Authorization: token $GH_TOKEN" \
-    "$API_BASE/contents?ref=$GH_BRANCH" \
-    | jq -r '.[].name' | grep '^data-.*\.zip$' | sort -r | tail -n +$((KEEP_BACKUPS + 1)))
-
-if [ -n "$OLD_BACKUPS" ]; then
-    for old_file in $OLD_BACKUPS; do
-        echo "[INFO] 删除: $old_file"
-        OLD_SHA=$(curl -s -H "Authorization: token $GH_TOKEN" \
-            "$API_BASE/contents/$old_file?ref=$GH_BRANCH" | jq -r '.sha')
-        
-        curl -s -X DELETE \
-            -H "Authorization: token $GH_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"message\":\"删除旧备份: $old_file\",\"sha\":\"$OLD_SHA\",\"branch\":\"$GH_BRANCH\"}" \
-            "$API_BASE/contents/$old_file" >/dev/null
-    done
-else
-    echo "[INFO] 没有需要清理的旧备份"
-fi
 
 echo "=========================================="
 echo "[SUCCESS] 备份完成: $BACKUP_FILE 🎉"

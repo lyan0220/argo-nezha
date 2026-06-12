@@ -15,25 +15,47 @@
 
 ## 一、准备工作
 
-| 平台       | 用途                         |
-| ---------- | ---------------------------- |
-| GitHub     | 存放代码、构建镜像、备份数据 |
-| Cloudflare | 提供域名和安全隧道           |
-| SAP BTP    | 运行容器（CF 免费区即可）    |
+| 平台       | 用途                                          |
+| ---------- | --------------------------------------------- |
+| GitHub     | 存放代码、构建镜像、备份数据（Releases 附件） |
+| Cloudflare | 提供域名和安全隧道                            |
+| SAP BTP    | 运行容器（CF 免费区即可）                     |
 
 ### 1.1 创建 GitHub 备份仓库
 
 新建一个 **Private** 仓库（如 `nezha-backup`），勾选 **Add a README file**。
 
+> 备份数据以 Release 附件形式存储在固定标签 `latest` 下，不会写入仓库文件树，因此仓库体积始终保持轻量。
+
 ### 1.2 生成 GitHub Token
+
+提供两种方式，任选其一：
+
+#### 方式 A：Classic Token（简单，权限较宽）
 
 **Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic)**：
 
 - Expiration：**No expiration**
 - 权限：
-  - ✅ `repo`（**必选**，备份脚本读写备份仓库需要）
+  - ✅ `repo`（**必选**，覆盖 Releases 附件上传与 README 更新）
 
-> Token 只显示一次，立刻复制保存。格式：`ghp_xxxxxxxxxxxx`
+> Token 格式：`ghp_xxxxxxxxxxxx`
+
+#### 方式 B：Fine-grained Token（推荐，最小权限）
+
+**Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**：
+
+- **Resource owner**：选择你的账号
+- **Repository access**：**Only select repositories** → 选择备份仓库（如 `nezha-backup`）
+- **Permissions**：
+  - ✅ **Contents**: Read and write（更新 README、操作 Releases 附件）
+  - ✅ **Metadata**: Read（默认已勾选，基础 API 访问）
+
+> Token 格式：`github_pat_xxxxxxxxxxxx`
+
+---
+
+> ⚠️ 两种 Token 只显示一次，立刻复制保存。Fine-grained Token 仅作用于指定仓库，泄露后影响范围更小。
 
 ### 1.3 注册 SAP BTP Cloud Foundry
 
@@ -141,7 +163,8 @@
 | `NZ_TLS`           | `true`                              | 探针 TLS 开关                                                                        |
 | `AGENT_VERSION`    | `latest`                            | 探针版本（`nezhahq/agent` 仓库的 tag）                                               |
 | `BACKUP_HOUR`      | `4`                                 | 自动备份时段（北京时间，0-23）                                                       |
-| `GH_BRANCH`        | `main`                              | 备份分支                                                                             |
+| `KEEP_BACKUPS`     | `5`                                 | Release 中保留的备份附件数量，超出自动删除最旧的                                     |
+| `GH_BRANCH`        | `main`                              | 备份仓库 README 所在分支                                                             |
 | `DOCKER_IMAGE`     | `ghcr.io/<owner>/argo-nezha:latest` | 自定义镜像地址                                                                       |
 | `MEMORY`           | `512M`                              | CF 内存配额                                                                          |
 | `DISK`             | `1024M`                             | CF 磁盘配额                                                                          |
@@ -179,13 +202,25 @@
 
 ## 八、备份与恢复
 
-- **自动备份**：默认每天凌晨 4 点（北京时间），文件名 `data-YYYY-MM-DD-HHMMSS.zip`
-- **手动触发**：把备份仓库的 `README.md` 内容**全部替换**为单词 `backup`，提交后等待最多 1 小时
-- **自动恢复**：容器启动时自动拉取最新备份解压恢复，无需手动操作
+备份采用 **GitHub Releases Assets** 方案：备份文件以二进制附件上传到备份仓库的 `latest` Release 下，不占用 git 历史，单文件最大支持 2GB。
+
+### 自动备份
+
+- 默认每天凌晨 4 点（北京时间）自动执行，文件名 `data-YYYY-MM-DD-HHMMSS.zip`
+- 仅保留最近 5 份备份（可通过 `KEEP_BACKUPS` 调整），超出自动删除旧附件
+
+### 手动触发
+
+- 把备份仓库的 `README.md` 内容**全部替换**为单词 `backup`，提交后等待最多 1 小时
 
 > 手动触发的 `README.md` 内容必须**只有** `backup` 6 个字符，不含空格/换行/其他字符。
 
-**备份内容**：
+### 自动恢复
+
+- 容器启动时自动从 `latest` Release 下载最新的 `data-*.zip` 附件并解压恢复，无需手动操作
+- 也支持指定文件名恢复历史版本：`/restore.sh data-2025-01-01-040000.zip`
+
+### 备份内容
 
 ```
 data-YYYY-MM-DD-HHMMSS.zip
@@ -194,6 +229,17 @@ data-YYYY-MM-DD-HHMMSS.zip
 ```
 
 > 备份包含探针配置后，恢复时容器内探针 `uuid` 不会漂移，面板不会把它当成新机器重复添加；`NZ_UUID` 仅在**全新部署**或想**强制重置探针 UUID**时填写（设置后会覆盖备份中的探针配置）。
+
+### 备份方案技术特点
+
+| 特性        | 说明                                              |
+| ----------- | ------------------------------------------------- |
+| 存储位置    | GitHub Releases Assets（固定 `latest` 标签）      |
+| 上传方式    | 二进制直传（`--data-binary`），无 base64 编码开销 |
+| 大小限制    | 单文件 2GB（旧 Contents API 方案仅 100MB）        |
+| 仓库体积    | 不膨胀 git 历史，仓库始终轻量                     |
+| SQLite 安全 | 使用 `.backup` 命令生成一致性快照                 |
+| 历史清理    | 备份前自动清理 30 天前的监控/流量记录并 VACUUM    |
 
 ---
 
@@ -233,17 +279,17 @@ data-YYYY-MM-DD-HHMMSS.zip
 
 ## 十一、常见问题
 
-| 问题                                          | 解决办法                                                          |
-| --------------------------------------------- | ----------------------------------------------------------------- |
-| `cf push` 报 image not found                  | GHCR 镜像没改 public（见步骤二）                                  |
-| 部署失败：`bind() to 0.0.0.0:443 failed`      | `ssl.conf.template` 被改回 443，应保持 8443                       |
-| Cloudflare Tunnel 显示 502/connection refused | Tunnel URL 必须是 `https://localhost:8443`                        |
-| 健康检查超时                                  | 工作流已设 `-t 180`；首次拉镜像稍慢，仍超时则检查 GHCR 镜像可见性 |
-| 面板打开但探针离线                            | Cloudflare 网络未开启 gRPC，或 Tunnel TLS 未勾选 No TLS Verify    |
-| 全新部署后服务器列表无容器内探针              | `NZ_UUID` 未设置（全新部署需要；从备份恢复时不需要）              |
-| 手动备份没触发                                | `README.md` 内容必须**仅有** `backup`（不含其他字符）             |
-| 重启后数据丢失                                | 检查 `GH_TOKEN` / `GH_REPO_*`，确认备份仓库有 `data-*.zip`        |
-| 工作流报名称冲突                              | 改用自定义 `app_name`，或等几分钟让旧应用清理                     |
+| 问题                                          | 解决办法                                                                    |
+| --------------------------------------------- | --------------------------------------------------------------------------- |
+| `cf push` 报 image not found                  | GHCR 镜像没改 public（见步骤二）                                            |
+| 部署失败：`bind() to 0.0.0.0:443 failed`      | `ssl.conf.template` 被改回 443，应保持 8443                                 |
+| Cloudflare Tunnel 显示 502/connection refused | Tunnel URL 必须是 `https://localhost:8443`                                  |
+| 健康检查超时                                  | 工作流已设 `-t 180`；首次拉镜像稍慢，仍超时则检查 GHCR 镜像可见性           |
+| 面板打开但探针离线                            | Cloudflare 网络未开启 gRPC，或 Tunnel TLS 未勾选 No TLS Verify              |
+| 全新部署后服务器列表无容器内探针              | `NZ_UUID` 未设置（全新部署需要；从备份恢复时不需要）                        |
+| 手动备份没触发                                | `README.md` 内容必须**仅有** `backup`（不含其他字符）                       |
+| 重启后数据丢失                                | 检查 `GH_TOKEN` / `GH_REPO_*`，确认备份仓库 Releases 中有 `data-*.zip` 附件 |
+| 工作流报名称冲突                              | 改用自定义 `app_name`，或等几分钟让旧应用清理                               |
 
 ---
 

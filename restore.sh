@@ -1,5 +1,5 @@
 #!/bin/bash
-# scripts/restore.sh - Nezha 数据恢复脚本
+# scripts/restore.sh - Nezha 数据恢复脚本 (Releases 方案适配版)
 set -u
 
 ###########################################
@@ -17,13 +17,22 @@ if [ -z "${ZIP_PASSWORD:-}" ]; then
     exit 1
 fi
 
+# 检查系统必要依赖
+for cmd in curl jq unzip; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "[ERROR] 系统缺少必要命令: $cmd，请先安装"
+        exit 1
+    fi
+done
+
 # 配置
 GH_BRANCH="${GH_BRANCH:-main}"
 DATA_DIR="${DATA_DIR:-/dashboard/data}"
+CONFIG_PATH="${CONFIG_PATH:-/dashboard/config.yml}" # 统一配置路径变量
 API_BASE="https://api.github.com/repos/$GH_REPO_OWNER/$GH_REPO_NAME"
 
 echo "=========================================="
-echo " Nezha 数据恢复"
+echo " Nezha 数据恢复 (Release模式)"
 echo "=========================================="
 
 # 临时目录
@@ -39,44 +48,54 @@ trap cleanup EXIT
 
 # 获取备份文件名
 BACKUP_FILE="${1:-}"
+ASSET_ID=""
 
+# 从 Release 接口获取文件信息
 if [ -z "$BACKUP_FILE" ]; then
-    echo "[INFO] 获取最新备份..."
+    echo "[INFO] 获取 latest Release 中的最新备份..."
     
-    # 优先从 README.md 获取
-    README_CONTENT=$(curl -sf -H "Authorization: token $GH_TOKEN" \
-        "$API_BASE/contents/README.md?ref=$GH_BRANCH" \
-        | jq -r '.content' | base64 -d 2>/dev/null || echo "")
+    # 获取最新的 zip 附件信息（按创建时间倒序，取最新一个）
+    ASSET_JSON=$(curl -s -H "Authorization: token $GH_TOKEN" \
+        "$API_BASE/releases/tags/latest" \
+        | jq -c '[.assets[] | select(.name | test("^data-.*\\.zip$"))] | sort_by(.created_at) | reverse | .[0]')
+        
+    if [ -z "$ASSET_JSON" ] || [ "$ASSET_JSON" = "null" ]; then
+        echo "[ERROR] 未在 latest Release 中找到备份附件"
+        exit 1
+    fi
     
-    # 从 README 中提取文件名
-    BACKUP_FILE=$(echo "$README_CONTENT" | grep -oE 'data-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}\.zip' | head -n1)
-    
-    # 如果 README 中没有，从文件列表获取
-    if [ -z "$BACKUP_FILE" ]; then
-        echo "[INFO] 从文件列表获取最新备份..."
-        BACKUP_FILE=$(curl -sf -H "Authorization: token $GH_TOKEN" \
-            "$API_BASE/contents?ref=$GH_BRANCH" \
-            | jq -r '.[].name' | grep '^data-.*\.zip$' | sort -r | head -n1)
+    BACKUP_FILE=$(echo "$ASSET_JSON" | jq -r '.name')
+    ASSET_ID=$(echo "$ASSET_JSON" | jq -r '.id')
+else
+    echo "[INFO] 指定了备份文件: $BACKUP_FILE，正在查询对应的 Asset ID..."
+    ASSET_ID=$(curl -s -H "Authorization: token $GH_TOKEN" \
+        "$API_BASE/releases/tags/latest" \
+        | jq -r --arg name "$BACKUP_FILE" '.assets[] | select(.name == $name) | .id')
+        
+    if [ -z "$ASSET_ID" ] || [ "$ASSET_ID" = "null" ]; then
+        echo "[ERROR] 在 Release 中找不到指定的文件: $BACKUP_FILE"
+        exit 1
     fi
 fi
 
-if [ -z "$BACKUP_FILE" ]; then
-    echo "[ERROR] 未找到备份文件"
+if [ -z "$BACKUP_FILE" ] || [ -z "$ASSET_ID" ]; then
+    echo "[ERROR] 无法确定备份文件或附件 ID"
     exit 1
 fi
 
-echo "[INFO] 备份文件: $BACKUP_FILE"
+echo "[INFO] 准备恢复备份文件: $BACKUP_FILE (Asset ID: $ASSET_ID)"
 
-# 下载备份文件
+# 下载备份文件 (通过 Asset ID 请求 octet-stream 并跟随重定向)
 echo "[INFO] 下载备份文件..."
 HTTP_CODE=$(curl -L -w "%{http_code}" \
     -H "Authorization: token $GH_TOKEN" \
-    -H "Accept: application/vnd.github.v3.raw" \
+    -H "Accept: application/octet-stream" \
     -o "$TMP_FILE" \
-    "$API_BASE/contents/$BACKUP_FILE?ref=$GH_BRANCH")
+    "$API_BASE/releases/assets/$ASSET_ID")
 
+# 检查 HTTP 状态码 (200 正常下载，可能存在 302 重定向到 S3 被 curl -L 处理后最终返回 200)
 if [ "$HTTP_CODE" != "200" ]; then
-    echo "[ERROR] 下载失败 (HTTP $HTTP_CODE)"
+    echo "[ERROR] 下载失败 (最终 HTTP 状态码: $HTTP_CODE)"
     exit 1
 fi
 
@@ -121,9 +140,9 @@ cp -R "$TEMP_DIR/data/"* "$DATA_DIR/"
 
 # 恢复探针配置（如果备份中包含）
 if [ -f "$TEMP_DIR/config.yml" ]; then
-    echo "[INFO] 恢复探针配置到 /dashboard/config.yml"
-    cp "$TEMP_DIR/config.yml" /dashboard/config.yml
-    chmod 644 /dashboard/config.yml
+    echo "[INFO] 恢复探针配置到 $CONFIG_PATH"
+    cp "$TEMP_DIR/config.yml" "$CONFIG_PATH"
+    chmod 644 "$CONFIG_PATH"
 fi
 
 # 设置权限
