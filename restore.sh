@@ -28,7 +28,7 @@ done
 # 配置
 GH_BRANCH="${GH_BRANCH:-main}"
 DATA_DIR="${DATA_DIR:-/dashboard/data}"
-CONFIG_PATH="${CONFIG_PATH:-/dashboard/config.yml}" # 统一配置路径变量
+CONFIG_PATH="${CONFIG_PATH:-/dashboard/config.yml}"
 API_BASE="https://api.github.com/repos/$GH_REPO_OWNER/$GH_REPO_NAME"
 
 echo "=========================================="

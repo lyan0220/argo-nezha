@@ -146,7 +146,7 @@ fi
 # 3. 删除旧附件（仅保留设定的数量）
 # ==========================================================
 echo "[INFO] 清理旧备份附件（保留 ${KEEP_BACKUPS} 个）..."
-# 获取该 release 下所有 assets，按创建时间倒序排，跳过前 KEEP_BACKUPS 个
+# 获取该 release 下所有 assets，保留最新的 KEEP_BACKUPS 个，其余列为待删除
 OLD_ASSETS_JSON=$(curl -s -H "Authorization: token $GH_TOKEN" "$API_BASE/releases/$RELEASE_ID/assets" \
     | jq -c "[sort_by(.created_at) | reverse | .[$KEEP_BACKUPS:] | .[] | {id: .id, name: .name}]")
 

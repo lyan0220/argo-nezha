@@ -67,7 +67,9 @@ ENV ARGO_DOMAIN="" \
     NZ_CLIENT_SECRET="" \
     NZ_UUID="" \
     NZ_TLS="" \
-    AGENT_VERSION="" 
+    AGENT_VERSION="" \
+    KEEP_BACKUPS="" \
+    BACKUP_HOUR=""
 
 # 复制脚本和静态文件
 COPY restore.sh /restore.sh
