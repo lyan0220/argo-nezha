@@ -198,7 +198,7 @@ README_TEXT="# Nezha 数据备份
 README_B64=$(echo -n "$README_TEXT" | b64_encode)
 
 if [ -n "$README_SHA" ]; then
-    jq -n --arg msg "更新 README (Release模式): $BACKUP_FILE" \
+    jq -n --arg msg "backup: $BACKUP_FILE" \
         --arg content "$README_B64" \
         --arg sha "$README_SHA" \
         --arg branch "$GH_BRANCH" \
