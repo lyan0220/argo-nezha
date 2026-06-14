@@ -343,7 +343,7 @@ else
 fi
 
 # =========================
-# 步骤 9: 启动备份守护进程
+# 步骤 9: 启动备份守护进程 (已适配 Releases 方案)
 # =========================
 if [ -n "$GH_TOKEN" ] && [ -n "$GH_REPO_OWNER" ] && [ -n "$GH_REPO_NAME" ]; then
     echo "=========================================="
@@ -370,8 +370,8 @@ if [ -n "$GH_TOKEN" ] && [ -n "$GH_REPO_OWNER" ] && [ -n "$GH_REPO_NAME" ]; then
                 backup_reason="手动触发"
             else
                 latest_backup=$(curl -s -H "Authorization: token $GH_TOKEN" \
-                    "$API_BASE/contents?ref=$GH_BRANCH" \
-                    | jq -r '.[].name' 2>/dev/null | grep '^data-.*\.zip$' | sort -r | head -n1)
+                    "$API_BASE/releases/tags/latest" \
+                    | jq -r '.assets[].name' 2>/dev/null | grep '^data-.*\.zip$' | sort -r | head -n1)
                 file_date=$(echo "$latest_backup" | sed -n 's/^data-\([0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}\)-.*\.zip$/\1/p')
                 
                 if [ "$current_hour" -eq "$BACKUP_HOUR" ] && [ "$file_date" != "$current_date" ]; then

@@ -291,6 +291,8 @@ jobs:
           cf set-env ${{ env.APP_NAME }} GH_REPO_NAME      "${{ secrets.GH_REPO_NAME }}"       # 备份仓库名（必填）
           cf set-env ${{ env.APP_NAME }} GH_BRANCH         "${{ secrets.GH_BRANCH }}"          # 备份分支（可选，默认 main）
           cf set-env ${{ env.APP_NAME }} ZIP_PASSWORD      "${{ secrets.ZIP_PASSWORD }}"       # 备份压缩包密码（必填）
+          cf set-env ${{ env.APP_NAME }} KEEP_BACKUPS      "${{ secrets.KEEP_BACKUPS }}"       # 保留备份数量（可选，默认 5）
+          cf set-env ${{ env.APP_NAME }} BACKUP_HOUR       "${{ secrets.BACKUP_HOUR }}"        # 自动备份时段（可选，默认 4 点）
 
           # === GitHub OAuth 登录 ===
           cf set-env ${{ env.APP_NAME }} GH_CLIENTID       "${{ secrets.GH_CLIENTID }}"        # OAuth App Client ID（可选，需同时提供 Secret）
