@@ -73,6 +73,8 @@
 
 镜像地址：`ghcr.io/<你的用户名>/argo-nezha:latest`
 
+> 💡 **关于哪吒面板的更新**：镜像本身**不再包含**哪吒面板二进制，面板由容器启动时从 `nezhahq/nezha` 的 GitHub Releases 下载。也就是说，哪吒发新版后**无需重建镜像、无需重新部署**，只要在 SAP CF 控制台或工作流里 **restage** 容器即可拉到新版本（默认 `DASHBOARD_VERSION=latest`，每次启动会查询最新 tag）。仅当你修改了 `Dockerfile` / `entrypoint.sh` / `nginx` 配置等仓库内文件时才需要重建镜像。
+
 ---
 
 ## 三、配置 Cloudflare Tunnel
@@ -162,6 +164,7 @@
 | `NZ_CLIENT_SECRET` | 自动生成 / 备份值                   | 首次部署留空 → 随机生成；恢复部署留空 → 沿用备份值；显式设置 → 覆盖面板与探针 secret |
 | `NZ_TLS`           | `true`                              | 探针 TLS 开关                                                                        |
 | `AGENT_VERSION`    | `latest`                            | 探针版本（`nezhahq/agent` 仓库的 tag）                                               |
+| `DASHBOARD_VERSION`| `latest`                            | 哪吒面板版本（`nezhahq/nezha` 仓库的 tag，如 `v2.2.3`），容器启动时下载              |
 | `BACKUP_HOUR`      | `4`                                 | 自动备份时段（北京时间，0-23）                                                       |
 | `KEEP_BACKUPS`     | `5`                                 | Release 中保留的备份附件数量，超出自动删除最旧的                                     |
 | `GH_BRANCH`        | `main`                              | 备份仓库 README 所在分支                                                             |
@@ -243,7 +246,36 @@ data-YYYY-MM-DD-HHMMSS.zip
 
 ---
 
-## 九、架构与端口
+## 九、哪吒面板版本管理
+
+哪吒面板二进制不再打进镜像，由 [entrypoint.sh](entrypoint.sh) 在容器启动时从 `nezhahq/nezha` 的 GitHub Releases 下载到 `/dashboard/app`。
+
+### 工作流程
+
+容器启动时执行的判断逻辑（参见 entrypoint.sh 步骤 3.4）：
+
+1. 解析目标版本：`DASHBOARD_VERSION=latest`（默认）→ 调 GitHub API 取最新 tag；填具体 tag（如 `v2.2.3`）→ 直接使用
+2. 读取本地 `/dashboard/.dashboard-version`（记录上次下载的版本）
+3. 目标版本与本地版本一致 → **跳过下载**
+4. 不一致或首次启动 → 下载对应 zip、解压、覆盖 `/dashboard/app`、写入新版本号
+5. 下载失败但本地已有旧版本 → 沿用旧版本继续启动；本地也没有 → 退出
+
+### 使用方式
+
+| 目标               | 操作                                                                |
+| ------------------ | ------------------------------------------------------------------- |
+| 跟随哪吒最新版     | 不设 `DASHBOARD_VERSION`（默认 `latest`），每次 restage 自动检查更新 |
+| 锁定具体版本       | 设 `DASHBOARD_VERSION=v2.2.3`，永远只跑该版本                       |
+| 升级（latest 模式）| 在 SAP CF 控制台 restage 应用即可                                   |
+| 紧急回滚           | 改 `DASHBOARD_VERSION` 为旧 tag 并 restage                          |
+
+> ⚠️ 容器重建（不是 restart 进程）时，`/dashboard/app` 与 `.dashboard-version` 都会丢失，下次启动会无条件重下；这是预期行为，不影响功能，只影响首次启动速度（约 +5–10 秒）。
+
+> 💡 在哪吒发新版时**无需重建镜像**。只有当你修改了仓库内代码（`Dockerfile` / `entrypoint.sh` / nginx 配置等）时才需要重新构建镜像。
+
+---
+
+## 十、架构与端口
 
 | 端口               | 谁在用                                   | 公网          |
 | ------------------ | ---------------------------------------- | ------------- |
@@ -256,7 +288,7 @@ data-YYYY-MM-DD-HHMMSS.zip
 
 ---
 
-## 十、项目文件
+## 十一、项目文件
 
 ```
 .
@@ -277,7 +309,7 @@ data-YYYY-MM-DD-HHMMSS.zip
 
 ---
 
-## 十一、常见问题
+## 十二、常见问题
 
 | 问题                                          | 解决办法                                                                    |
 | --------------------------------------------- | --------------------------------------------------------------------------- |

@@ -9,6 +9,7 @@ NZ_UUID=${NZ_UUID:-""}
 NZ_CLIENT_SECRET=${NZ_CLIENT_SECRET:-""}
 NZ_TLS=${NZ_TLS:-true}
 AGENT_VERSION=${AGENT_VERSION:-latest}
+DASHBOARD_VERSION=${DASHBOARD_VERSION:-latest}
 
 GH_REPO_OWNER=${GH_REPO_OWNER:-""}
 GH_REPO_NAME=${GH_REPO_NAME:-""}
@@ -60,6 +61,9 @@ wait_for_port() {
     return 1
 }
 
+# =========================
+# 写入 GitHub OAuth 配置函数
+# =========================
 ensure_github_oauth() {
   if [ -n "$GH_CLIENTID" ] && [ -n "$GH_CLIENTSECRET" ] && [ -f /dashboard/data/config.yaml ]; then
     tmp_config=/dashboard/data/config.yaml.tmp
@@ -123,6 +127,86 @@ fi
 # =========================
 log_info "启动 crond"
 crond
+
+# =========================
+# 步骤 3.4: 下载哪吒面板二进制
+# 决策：本地已记录版本 == 目标版本 → 跳过；否则下载新版本覆盖
+#       目标版本为 latest 时，每次启动都向 GitHub 询问最新 tag
+# =========================
+echo "=========================================="
+echo " 步骤 3.4: 下载哪吒面板 ($DASHBOARD_VERSION)"
+echo "=========================================="
+
+arch=$(uname -m)
+case $arch in
+    x86_64)  dash_file="dashboard-linux-amd64.zip"; dash_bin="dashboard-linux-amd64" ;;
+    aarch64) dash_file="dashboard-linux-arm64.zip"; dash_bin="dashboard-linux-arm64" ;;
+    s390x)   dash_file="dashboard-linux-s390x.zip"; dash_bin="dashboard-linux-s390x" ;;
+    *)
+        log_error "不支持的架构: $arch"
+        exit 1
+        ;;
+esac
+
+VERSION_FILE=/dashboard/.dashboard-version
+CURRENT_VERSION=$(cat "$VERSION_FILE" 2>/dev/null || echo "")
+
+TARGET_VERSION="$DASHBOARD_VERSION"
+if [ -z "$TARGET_VERSION" ] || [ "$TARGET_VERSION" = "latest" ]; then
+    LATEST_TAG=$(curl -sL --max-time 15 https://api.github.com/repos/nezhahq/nezha/releases/latest \
+        | grep '"tag_name":' | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
+    if [ -n "$LATEST_TAG" ]; then
+        TARGET_VERSION="$LATEST_TAG"
+        log_info "解析最新版本: $TARGET_VERSION"
+    else
+        log_warn "查询最新版本失败"
+        TARGET_VERSION=""
+    fi
+fi
+
+need_download=false
+if [ ! -x /dashboard/app ]; then
+    log_info "本地无面板二进制，需要下载"
+    need_download=true
+elif [ -z "$TARGET_VERSION" ]; then
+    log_warn "无法解析目标版本，沿用本地 (current=$CURRENT_VERSION)"
+elif [ "$TARGET_VERSION" != "$CURRENT_VERSION" ]; then
+    log_info "面板版本变更: $CURRENT_VERSION -> $TARGET_VERSION，开始下载"
+    need_download=true
+else
+    log_ok "面板已是目标版本: $CURRENT_VERSION"
+fi
+
+if [ "$need_download" = "true" ] && [ -n "$TARGET_VERSION" ]; then
+    DASH_URL="https://github.com/nezhahq/nezha/releases/download/${TARGET_VERSION}/${dash_file}"
+    log_info "下载: $DASH_URL"
+    TMP_ZIP=/tmp/dashboard-$$.zip
+    TMP_DIR=/tmp/dashboard-$$
+    rm -rf "$TMP_DIR" "$TMP_ZIP"
+    mkdir -p "$TMP_DIR"
+    if curl -fsSL --max-time 300 -o "$TMP_ZIP" "$DASH_URL" && [ -s "$TMP_ZIP" ]; then
+        if unzip -qo "$TMP_ZIP" -d "$TMP_DIR" && [ -f "$TMP_DIR/$dash_bin" ]; then
+            mv "$TMP_DIR/$dash_bin" /dashboard/app
+            chmod +x /dashboard/app
+            echo "$TARGET_VERSION" > "$VERSION_FILE"
+            log_ok "面板下载完成: $TARGET_VERSION"
+        else
+            log_error "解压失败或未找到二进制 $dash_bin"
+            [ -x /dashboard/app ] || exit 1
+            log_warn "沿用本地旧版本"
+        fi
+    else
+        log_error "下载失败: $DASH_URL"
+        [ -x /dashboard/app ] || exit 1
+        log_warn "沿用本地旧版本"
+    fi
+    rm -rf "$TMP_DIR" "$TMP_ZIP"
+fi
+
+if [ ! -x /dashboard/app ]; then
+    log_error "/dashboard/app 不存在，无法继续"
+    exit 1
+fi
 
 # =========================
 # 步骤 3.5: 首次部署时生成面板配置

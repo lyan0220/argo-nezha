@@ -283,7 +283,8 @@ jobs:
           cf set-env ${{ env.APP_NAME }} NZ_UUID           "${{ secrets.NZ_UUID }}"            # 探针 UUID（必填）
           cf set-env ${{ env.APP_NAME }} NZ_CLIENT_SECRET  "${{ secrets.NZ_CLIENT_SECRET }}"   # agent_secret_key（可选，留空自动生成）
           cf set-env ${{ env.APP_NAME }} NZ_TLS            "${{ secrets.NZ_TLS }}"             # 是否启用 TLS（可选，默认 true）
-          cf set-env ${{ env.APP_NAME }} AGENT_VERSION    "${{ secrets.AGENT_VERSION }}"      # 探针版本（可选，默认 latest）
+          cf set-env ${{ env.APP_NAME }} AGENT_VERSION     "${{ secrets.AGENT_VERSION }}"      # 探针版本（可选，默认 latest）
+          cf set-env ${{ env.APP_NAME }} DASHBOARD_VERSION "${{ secrets.DASHBOARD_VERSION }}"  # 面板版本（可选，默认 latest）
 
           # === GitHub 备份 ===
           cf set-env ${{ env.APP_NAME }} GH_TOKEN          "${{ secrets.GH_TOKEN }}"           # GitHub PAT（必填）
