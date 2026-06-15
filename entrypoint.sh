@@ -180,9 +180,11 @@ fi
 if [ "$need_download" = "true" ] && [ -n "$TARGET_VERSION" ]; then
     DASH_URL="https://github.com/nezhahq/nezha/releases/download/${TARGET_VERSION}/${dash_file}"
     log_info "下载: $DASH_URL"
-    TMP_ZIP=$(mktemp -t dashboard.XXXXXX.zip)
+    TMP_ZIP=/tmp/dashboard-$$.zip
+    TMP_DIR=/tmp/dashboard-$$
+    rm -rf "$TMP_DIR" "$TMP_ZIP"
+    mkdir -p "$TMP_DIR"
     if curl -fsSL --max-time 300 -o "$TMP_ZIP" "$DASH_URL" && [ -s "$TMP_ZIP" ]; then
-        TMP_DIR=$(mktemp -d)
         if unzip -qo "$TMP_ZIP" -d "$TMP_DIR" && [ -f "$TMP_DIR/$dash_bin" ]; then
             mv "$TMP_DIR/$dash_bin" /dashboard/app
             chmod +x /dashboard/app
@@ -193,13 +195,12 @@ if [ "$need_download" = "true" ] && [ -n "$TARGET_VERSION" ]; then
             [ -x /dashboard/app ] || exit 1
             log_warn "沿用本地旧版本"
         fi
-        rm -rf "$TMP_DIR" "$TMP_ZIP"
     else
-        rm -f "$TMP_ZIP"
         log_error "下载失败: $DASH_URL"
         [ -x /dashboard/app ] || exit 1
         log_warn "沿用本地旧版本"
     fi
+    rm -rf "$TMP_DIR" "$TMP_ZIP"
 fi
 
 if [ ! -x /dashboard/app ]; then
