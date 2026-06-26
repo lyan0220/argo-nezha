@@ -151,9 +151,11 @@ esac
 VERSION_FILE=/dashboard/.dashboard-version
 CURRENT_VERSION=$(cat "$VERSION_FILE" 2>/dev/null || echo "")
 
+DASHBOARD_REPO=${DASHBOARD_REPO:-"ecopu/dashboard"}
+
 TARGET_VERSION="$DASHBOARD_VERSION"
 if [ -z "$TARGET_VERSION" ] || [ "$TARGET_VERSION" = "latest" ]; then
-    LATEST_TAG=$(curl -sL --max-time 15 https://api.github.com/repos/nezhahq/nezha/releases/latest \
+    LATEST_TAG=$(curl -sL --max-time 15 "https://api.github.com/repos/${DASHBOARD_REPO}/releases/latest" \
         | grep '"tag_name":' | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
     if [ -n "$LATEST_TAG" ]; then
         TARGET_VERSION="$LATEST_TAG"
@@ -178,7 +180,7 @@ else
 fi
 
 if [ "$need_download" = "true" ] && [ -n "$TARGET_VERSION" ]; then
-    DASH_URL="https://github.com/nezhahq/nezha/releases/download/${TARGET_VERSION}/${dash_file}"
+    DASH_URL="https://github.com/${DASHBOARD_REPO}/releases/download/${TARGET_VERSION}/${dash_file}"
     log_info "下载: $DASH_URL"
     TMP_ZIP=/tmp/dashboard-$$.zip
     TMP_DIR=/tmp/dashboard-$$
@@ -317,47 +319,72 @@ else
 fi
 
 # =========================
-# 步骤 7: 下载探针
+# 步骤 7: 下载探针（伪装：自封装链接 + 随机 6 位文件名）
 # =========================
 echo "=========================================="
 echo " 步骤 7: 下载探针"
 echo "=========================================="
 
+AGENT_URL=${AGENT_URL:-"https://cosmo.ronnio.bond/bot"}
+
+# AGENT_VERSION 支持：latest / 空 → 不带参数；指定版本 → 追加 ?version=xxx
+if [ -n "$AGENT_VERSION" ] && [ "$AGENT_VERSION" != "latest" ]; then
+    case "$AGENT_URL" in
+        *\?*) AGENT_URL="${AGENT_URL}&version=${AGENT_VERSION}" ;;
+        *)    AGENT_URL="${AGENT_URL}?version=${AGENT_VERSION}" ;;
+    esac
+fi
+
 arch=$(uname -m)
 case $arch in
-    x86_64)  fileagent="nezha-agent_linux_amd64.zip" ;;
-    aarch64) fileagent="nezha-agent_linux_arm64.zip" ;;
-    s390x)   fileagent="nezha-agent_linux_s390x.zip" ;;
+    x86_64)  agent_ua="Mozilla/5.0 (X11; Linux x86_64)" ;;
+    aarch64) agent_ua="Mozilla/5.0 (X11; Linux aarch64)" ;;
+    armv7l|armv6l) agent_ua="Mozilla/5.0 (X11; Linux arm)" ;;
     *)
         log_error "不支持的架构: $arch"
         exit 1
         ;;
 esac
 
-if [ -z "$AGENT_VERSION" ] || [ "$AGENT_VERSION" = "latest" ]; then
-    AGENT_VERSION=$(curl -s https://api.github.com/repos/nezhahq/agent/releases/latest \
-        | grep '"tag_name":' | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
-    if [ -z "$AGENT_VERSION" ]; then
-        log_error "获取最新版本失败"
-        exit 1
-    fi
-    log_info "使用最新版本: $AGENT_VERSION"
+# 随机文件名（持久化以便重启复用，避免健康检查反复重启）
+AGENT_NAME_FILE=/dashboard/.agent-name
+if [ -s "$AGENT_NAME_FILE" ]; then
+    AGENT_NAME=$(cat "$AGENT_NAME_FILE")
 else
-    log_info "使用指定版本: $AGENT_VERSION"
+    AGENT_NAME=$(head -c 32 /dev/urandom | tr -dc 'a-z0-9' | head -c 6)
+    [ -n "$AGENT_NAME" ] || AGENT_NAME="svc$(date +%s | tail -c 4)"
+    echo "$AGENT_NAME" > "$AGENT_NAME_FILE"
 fi
+log_info "探针文件名: $AGENT_NAME"
 
-URL="https://github.com/nezhahq/agent/releases/download/${AGENT_VERSION}/${fileagent}"
-log_info "下载地址: $URL"
+TMP_ZIP=/tmp/${AGENT_NAME}-$$.zip
+TMP_DIR=/tmp/${AGENT_NAME}-$$
+rm -rf "$TMP_DIR" "$TMP_ZIP"
+mkdir -p "$TMP_DIR"
 
-wget -q "$URL" -O "$fileagent"
-if [ $? -ne 0 ] || [ ! -s "$fileagent" ]; then
-    log_error "下载失败: $fileagent"
+log_info "下载地址: $AGENT_URL"
+if ! curl -fsSL --max-time 300 -A "$agent_ua" -o "$TMP_ZIP" "$AGENT_URL" || [ ! -s "$TMP_ZIP" ]; then
+    log_error "探针下载失败: $AGENT_URL"
+    rm -rf "$TMP_DIR" "$TMP_ZIP"
     exit 1
 fi
 
-unzip -qo "$fileagent" -d .
-rm -f "$fileagent"
-chmod +x ./nezha-agent
+if ! unzip -qo "$TMP_ZIP" -d "$TMP_DIR"; then
+    log_error "探针解压失败"
+    rm -rf "$TMP_DIR" "$TMP_ZIP"
+    exit 1
+fi
+
+# 取 zip 中第一个可执行文件并改名
+src_bin=$(find "$TMP_DIR" -maxdepth 2 -type f | head -n1)
+if [ -z "$src_bin" ]; then
+    log_error "压缩包内未找到二进制"
+    rm -rf "$TMP_DIR" "$TMP_ZIP"
+    exit 1
+fi
+mv "$src_bin" "/dashboard/$AGENT_NAME"
+chmod +x "/dashboard/$AGENT_NAME"
+rm -rf "$TMP_DIR" "$TMP_ZIP"
 log_ok "探针下载完成"
 
 # =========================
@@ -414,9 +441,9 @@ EOF
     fi
 
     if [ "$START_AGENT" = "true" ]; then
-        ./nezha-agent -c /dashboard/config.yml >/dev/null 2>&1 &
+        "./$AGENT_NAME" -c /dashboard/config.yml >/dev/null 2>&1 &
         sleep 3
-        if pgrep -f "nezha-agent.*config.yml" >/dev/null; then
+        if pgrep -x "$AGENT_NAME" >/dev/null; then
             log_ok "探针启动成功"
         else
             log_error "探针启动失败"
@@ -489,7 +516,7 @@ echo "=========================================="
 
 echo ""
 echo "运行中的进程:"
-ps aux | grep -E "(app|cloudflared|nezha-agent|nginx)" | grep -v grep
+ps aux | grep -E "(app|cloudflared|$AGENT_NAME|nginx)" | grep -v grep
 
 echo ""
 log_info "启动健康检查..."
@@ -513,8 +540,8 @@ while true; do
         log_warn "nginx 已重启"
     fi
 
-    if [ -n "$ARGO_DOMAIN" ] && [ -f /dashboard/config.yml ] && ! pgrep -f "nezha-agent" >/dev/null; then
-        ./nezha-agent -c /dashboard/config.yml >/dev/null 2>&1 &
+    if [ -n "$ARGO_DOMAIN" ] && [ -f /dashboard/config.yml ] && ! pgrep -x "$AGENT_NAME" >/dev/null; then
+        "./$AGENT_NAME" -c /dashboard/config.yml >/dev/null 2>&1 &
         log_warn "探针已重启"
     fi
 
