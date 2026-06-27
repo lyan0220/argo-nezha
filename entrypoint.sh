@@ -17,8 +17,8 @@ GH_TOKEN=${GH_TOKEN:-""}
 GH_BRANCH=${GH_BRANCH:-main}
 ZIP_PASSWORD=${ZIP_PASSWORD:-""}
 
-# CF 注入 $PORT； 默认 8080
-PORT=${PORT:-8080}
+# 注入 $PORT； 默认 7860
+PORT=${PORT:-7860}
 export PORT
 
 # =========================
