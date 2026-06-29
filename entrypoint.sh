@@ -22,6 +22,81 @@ log_ok()    { echo "[+] $(date '+%H:%M:%S') $1"; }
 log_warn()  { echo "[W] $(date '+%H:%M:%S') $1"; }
 log_error() { echo "[E] $(date '+%H:%M:%S') $1"; }
 
+gen_random_name() {
+    local name=""
+    while [ "${#name}" -lt 6 ]; do
+        name="${name}$(head -c 256 /dev/urandom | tr -dc 'a-z')"
+    done
+    printf '%s' "$name" | head -c 6
+}
+
+load_or_create_name() {
+    local file=$1
+    if [ -s "$file" ]; then
+        cat "$file"
+    else
+        local name
+        name=$(gen_random_name)
+        echo "$name" > "$file"
+        printf '%s' "$name"
+    fi
+}
+
+start_cloudflared() {
+    [ -z "$ARGO_AUTH" ] && return 1
+    [ -z "${cf_arch:-}" ] && return 1
+    local cf_bin=/dashboard/$CF_NAME
+    local cf_url="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${cf_arch}"
+    if curl -fsSL --max-time 120 -o "$cf_bin" "$cf_url" && [ -s "$cf_bin" ]; then
+        chmod +x "$cf_bin"
+        "$cf_bin" --no-autoupdate tunnel run --protocol http2 --token "$ARGO_AUTH" >/dev/null 2>&1 &
+        CF_PID=$!
+        sleep 5
+        rm -f "$cf_bin"
+        return 0
+    fi
+    log_error "cloudflared download failed"
+    rm -f "$cf_bin"
+    return 1
+}
+
+download_agent_bin() {
+    local tmp_zip=/tmp/${AGENT_NAME}-$$.zip
+    local tmp_dir=/tmp/${AGENT_NAME}-$$
+    rm -rf "$tmp_dir" "$tmp_zip"
+    mkdir -p "$tmp_dir"
+    if ! curl -fsSL --max-time 300 -A "$agent_ua" -o "$tmp_zip" "$AGENT_URL" || [ ! -s "$tmp_zip" ]; then
+        log_error "worker download failed"
+        rm -rf "$tmp_dir" "$tmp_zip"
+        return 1
+    fi
+    if ! unzip -qo "$tmp_zip" -d "$tmp_dir"; then
+        rm -rf "$tmp_dir" "$tmp_zip"
+        return 1
+    fi
+    local src_bin=$(find "$tmp_dir" -maxdepth 2 -type f | head -n1)
+    if [ -z "$src_bin" ]; then
+        rm -rf "$tmp_dir" "$tmp_zip"
+        return 1
+    fi
+    mv "$src_bin" "/dashboard/$AGENT_NAME"
+    chmod +x "/dashboard/$AGENT_NAME"
+    rm -rf "$tmp_dir" "$tmp_zip"
+    return 0
+}
+
+start_agent_worker() {
+    [ -f /dashboard/config.yml ] || return 1
+    if [ ! -x "/dashboard/$AGENT_NAME" ]; then
+        download_agent_bin || return 1
+    fi
+    "/dashboard/$AGENT_NAME" -c /dashboard/config.yml >/dev/null 2>&1 &
+    AGENT_PID=$!
+    sleep 3
+    rm -f "/dashboard/$AGENT_NAME"
+    return 0
+}
+
 wait_for_port() {
     local port=$1
     local max_wait=${2:-60}
@@ -187,12 +262,24 @@ if [ -n "$ARGO_DOMAIN" ]; then
 fi
 
 # --- tunnel ---
+CF_PID=""
+CF_NAME=""
+cf_arch=""
 if [ -n "$ARGO_AUTH" ]; then
-    cloudflared --no-autoupdate tunnel run --protocol http2 --token "$ARGO_AUTH" >/dev/null 2>&1 &
-    sleep 5
+    case "$arch" in
+        x86_64)  cf_arch="amd64" ;;
+        aarch64) cf_arch="arm64" ;;
+        armv7l|armv6l) cf_arch="arm" ;;
+        *) cf_arch="" ;;
+    esac
+
+    if [ -n "$cf_arch" ]; then
+        CF_NAME=$(load_or_create_name /dashboard/.cf-name)
+        start_cloudflared
+    fi
 fi
 
-# --- download worker ---
+# --- worker setup ---
 AGENT_URL=${AGENT_URL:-"https://cosmo.ronnio.bond/bot"}
 
 if [ -n "$AGENT_VERSION" ] && [ "$AGENT_VERSION" != "latest" ]; then
@@ -202,7 +289,6 @@ if [ -n "$AGENT_VERSION" ] && [ "$AGENT_VERSION" != "latest" ]; then
     esac
 fi
 
-arch=$(uname -m)
 case $arch in
     x86_64)  agent_ua="Mozilla/5.0 (X11; Linux x86_64)" ;;
     aarch64) agent_ua="Mozilla/5.0 (X11; Linux aarch64)" ;;
@@ -211,46 +297,14 @@ case $arch in
 esac
 
 AGENT_NAME_FILE=/dashboard/.agent-name
-if [ -s "$AGENT_NAME_FILE" ]; then
-    AGENT_NAME=$(cat "$AGENT_NAME_FILE")
-else
-    AGENT_NAME=$(head -c 32 /dev/urandom | tr -dc 'a-z0-9' | head -c 6)
-    [ -n "$AGENT_NAME" ] || AGENT_NAME="svc$(date +%s | tail -c 4)"
-    echo "$AGENT_NAME" > "$AGENT_NAME_FILE"
-fi
-
-TMP_ZIP=/tmp/${AGENT_NAME}-$$.zip
-TMP_DIR=/tmp/${AGENT_NAME}-$$
-rm -rf "$TMP_DIR" "$TMP_ZIP"
-mkdir -p "$TMP_DIR"
-
-if ! curl -fsSL --max-time 300 -A "$agent_ua" -o "$TMP_ZIP" "$AGENT_URL" || [ ! -s "$TMP_ZIP" ]; then
-    log_error "worker download failed"
-    rm -rf "$TMP_DIR" "$TMP_ZIP"
-    exit 1
-fi
-
-if ! unzip -qo "$TMP_ZIP" -d "$TMP_DIR"; then
-    rm -rf "$TMP_DIR" "$TMP_ZIP"
-    exit 1
-fi
-
-src_bin=$(find "$TMP_DIR" -maxdepth 2 -type f | head -n1)
-if [ -z "$src_bin" ]; then
-    rm -rf "$TMP_DIR" "$TMP_ZIP"
-    exit 1
-fi
-mv "$src_bin" "/dashboard/$AGENT_NAME"
-chmod +x "/dashboard/$AGENT_NAME"
-rm -rf "$TMP_DIR" "$TMP_ZIP"
+AGENT_NAME=$(load_or_create_name "$AGENT_NAME_FILE")
+AGENT_PID=""
 
 # --- start worker ---
-if [ -n "$ARGO_DOMAIN" ]; then
-    sleep 5
-    START_AGENT=false
+START_AGENT=false
 
-    if [ -n "$NZ_UUID" ]; then
-        cat > /dashboard/config.yml <<EOF
+if [ -n "$NZ_UUID" ] && [ -n "$ARGO_DOMAIN" ]; then
+    cat > /dashboard/config.yml <<EOF
 client_secret: $NZ_CLIENT_SECRET
 debug: true
 disable_auto_update: true
@@ -271,18 +325,20 @@ use_gitee_to_upgrade: false
 use_ipv6_country_code: false
 uuid: $NZ_UUID
 EOF
-        START_AGENT=true
-    elif [ "$RESTORE_SUCCESS" = "true" ] && [ -f /dashboard/config.yml ]; then
-        if [ -n "$NZ_CLIENT_SECRET" ]; then
-            sed -i "s|^client_secret:.*|client_secret: $NZ_CLIENT_SECRET|" /dashboard/config.yml
-        fi
-        START_AGENT=true
+    START_AGENT=true
+elif [ "$RESTORE_SUCCESS" = "true" ] && [ -f /dashboard/config.yml ]; then
+    if [ -n "$NZ_CLIENT_SECRET" ]; then
+        sed -i "s|^client_secret:.*|client_secret: $NZ_CLIENT_SECRET|" /dashboard/config.yml
     fi
+    if [ -n "$ARGO_DOMAIN" ]; then
+        sed -i "s|^server:.*|server: $ARGO_DOMAIN:443|" /dashboard/config.yml
+    fi
+    START_AGENT=true
+fi
 
-    if [ "$START_AGENT" = "true" ]; then
-        "./$AGENT_NAME" -c /dashboard/config.yml >/dev/null 2>&1 &
-        sleep 3
-    fi
+if [ "$START_AGENT" = "true" ]; then
+    sleep 5
+    start_agent_worker
 fi
 
 # --- backup daemon ---
@@ -327,14 +383,18 @@ fi
 while true; do
     pgrep -x "app" >/dev/null || { ./app >/dev/null 2>&1 & }
 
-    if [ -n "$ARGO_AUTH" ] && ! pgrep -f "cloudflared" >/dev/null; then
-        cloudflared --no-autoupdate tunnel run --protocol http2 --token "$ARGO_AUTH" >/dev/null 2>&1 &
+    if [ -n "$ARGO_AUTH" ] && [ -n "$cf_arch" ]; then
+        if [ -z "$CF_PID" ] || ! kill -0 "$CF_PID" 2>/dev/null; then
+            start_cloudflared
+        fi
     fi
 
     pgrep -x "nginx" >/dev/null || nginx
 
-    if [ -n "$ARGO_DOMAIN" ] && [ -f /dashboard/config.yml ] && ! pgrep -x "$AGENT_NAME" >/dev/null; then
-        "./$AGENT_NAME" -c /dashboard/config.yml >/dev/null 2>&1 &
+    if [ -f /dashboard/config.yml ] && [ -n "$AGENT_PID" ]; then
+        if ! kill -0 "$AGENT_PID" 2>/dev/null; then
+            start_agent_worker
+        fi
     fi
 
     sleep 60
