@@ -16,8 +16,6 @@ RUN apk add --no-cache \
     sqlite \
     sqlite-libs
 
-COPY --from=cloudflare/cloudflared:latest /usr/local/bin/cloudflared /usr/local/bin/cloudflared
-
 COPY main.conf.template /etc/nginx/main.conf.template
 RUN rm -f /etc/nginx/conf.d/default.conf
 COPY ssl.conf.template /etc/nginx/ssl.conf.template
