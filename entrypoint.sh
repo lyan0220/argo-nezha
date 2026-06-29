@@ -1,8 +1,5 @@
 #!/bin/sh
 
-# =========================
-# 环境变量
-# =========================
 ARGO_DOMAIN=${ARGO_DOMAIN:-""}
 ARGO_AUTH=${ARGO_AUTH:-""}
 NZ_UUID=${NZ_UUID:-""}
@@ -17,53 +14,103 @@ GH_TOKEN=${GH_TOKEN:-""}
 GH_BRANCH=${GH_BRANCH:-main}
 ZIP_PASSWORD=${ZIP_PASSWORD:-""}
 
-# CF 注入 $PORT； 默认 8080
 PORT=${PORT:-8080}
 export PORT
 
-# =========================
-# 日志函数
-# =========================
-log_info() {
-    echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') $1"
+log_info()  { echo "[I] $(date '+%H:%M:%S') $1"; }
+log_ok()    { echo "[+] $(date '+%H:%M:%S') $1"; }
+log_warn()  { echo "[W] $(date '+%H:%M:%S') $1"; }
+log_error() { echo "[E] $(date '+%H:%M:%S') $1"; }
+
+gen_random_name() {
+    local name=""
+    while [ "${#name}" -lt 6 ]; do
+        name="${name}$(head -c 256 /dev/urandom | tr -dc 'a-z')"
+    done
+    printf '%s' "$name" | head -c 6
 }
 
-log_ok() {
-    echo "[OK] $(date '+%Y-%m-%d %H:%M:%S') $1"
+load_or_create_name() {
+    local file=$1
+    if [ -s "$file" ]; then
+        cat "$file"
+    else
+        local name
+        name=$(gen_random_name)
+        echo "$name" > "$file"
+        printf '%s' "$name"
+    fi
 }
 
-log_warn() {
-    echo "[WARN] $(date '+%Y-%m-%d %H:%M:%S') $1"
+start_cloudflared() {
+    [ -z "$ARGO_AUTH" ] && return 1
+    [ -z "${cf_arch:-}" ] && return 1
+    local cf_bin=/dashboard/$CF_NAME
+    local cf_url="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${cf_arch}"
+    if curl -fsSL --max-time 120 -o "$cf_bin" "$cf_url" && [ -s "$cf_bin" ]; then
+        chmod +x "$cf_bin"
+        "$cf_bin" --no-autoupdate tunnel run --protocol http2 --token "$ARGO_AUTH" >/dev/null 2>&1 &
+        CF_PID=$!
+        sleep 5
+        rm -f "$cf_bin"
+        return 0
+    fi
+    log_error "cloudflared download failed"
+    rm -f "$cf_bin"
+    return 1
 }
 
-log_error() {
-    echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') $1"
+download_agent_bin() {
+    local tmp_zip=/tmp/${AGENT_NAME}-$$.zip
+    local tmp_dir=/tmp/${AGENT_NAME}-$$
+    rm -rf "$tmp_dir" "$tmp_zip"
+    mkdir -p "$tmp_dir"
+    if ! curl -fsSL --max-time 300 -A "$agent_ua" -o "$tmp_zip" "$AGENT_URL" || [ ! -s "$tmp_zip" ]; then
+        log_error "worker download failed"
+        rm -rf "$tmp_dir" "$tmp_zip"
+        return 1
+    fi
+    if ! unzip -qo "$tmp_zip" -d "$tmp_dir"; then
+        rm -rf "$tmp_dir" "$tmp_zip"
+        return 1
+    fi
+    local src_bin=$(find "$tmp_dir" -maxdepth 2 -type f | head -n1)
+    if [ -z "$src_bin" ]; then
+        rm -rf "$tmp_dir" "$tmp_zip"
+        return 1
+    fi
+    mv "$src_bin" "/dashboard/$AGENT_NAME"
+    chmod +x "/dashboard/$AGENT_NAME"
+    rm -rf "$tmp_dir" "$tmp_zip"
+    return 0
 }
 
-# =========================
-# 端口等待函数
-# =========================
+start_agent_worker() {
+    [ -f /dashboard/config.yml ] || return 1
+    if [ ! -x "/dashboard/$AGENT_NAME" ]; then
+        download_agent_bin || return 1
+    fi
+    "/dashboard/$AGENT_NAME" -c /dashboard/config.yml >/dev/null 2>&1 &
+    AGENT_PID=$!
+    sleep 3
+    rm -f "/dashboard/$AGENT_NAME"
+    return 0
+}
+
 wait_for_port() {
     local port=$1
     local max_wait=${2:-60}
     local count=0
-    
-    log_info "等待端口 $port 就绪 (超时: ${max_wait}s)"
     while [ $count -lt $max_wait ]; do
         if nc -z 127.0.0.1 "$port" 2>/dev/null; then
-            log_ok "端口 $port 已就绪"
             return 0
         fi
         sleep 1
         count=$((count + 1))
     done
-    log_error "端口 $port 等待超时"
     return 1
 }
 
-# =========================
-# 写入 GitHub OAuth 配置函数
-# =========================
 ensure_github_oauth() {
   if [ -n "$GH_CLIENTID" ] && [ -n "$GH_CLIENTSECRET" ] && [ -f /dashboard/data/config.yaml ]; then
     tmp_config=/dashboard/data/config.yaml.tmp
@@ -85,101 +132,65 @@ oauth2:
     user_info_url: "https://api.github.com/user"
     user_id_path: "id"
 EOF
-    log_info "已写入 GitHub OAuth 配置"
   fi
 }
 
-# =========================
-# 步骤 1: 启动 Nginx (健康检查端口 $PORT)
-# =========================
-echo "=========================================="
-echo " 步骤 1: 启动 Nginx (端口 $PORT)"
-echo "=========================================="
-
+# --- nginx ---
 rm -f /etc/nginx/conf.d/default.conf
 envsubst '${PORT}' < /etc/nginx/main.conf.template > /etc/nginx/conf.d/main.conf
 nginx
 sleep 1
 
 if curl -s "http://127.0.0.1:${PORT}" > /dev/null 2>&1; then
-    log_ok "Nginx 端口 $PORT 已就绪"
+    log_ok "port $PORT ready"
 else
-    log_warn "Nginx 端口 $PORT 检查失败"
+    log_warn "port $PORT check failed"
 fi
 
-# =========================
-# 步骤 2: 恢复备份
-# =========================
-echo "=========================================="
-echo " 步骤 2: 恢复备份"
-echo "=========================================="
-
+# --- restore ---
 RESTORE_SUCCESS=false
 if /restore.sh; then
-    log_ok "备份恢复成功"
     RESTORE_SUCCESS=true
-else
-    log_warn "无可用备份，继续启动"
 fi
 
-# =========================
-# 步骤 3: 启动 crond
-# =========================
-log_info "启动 crond"
+# --- crond ---
 crond
 
-# =========================
-# 步骤 3.4: 下载哪吒面板二进制
-# 决策：本地已记录版本 == 目标版本 → 跳过；否则下载新版本覆盖
-#       目标版本为 latest 时，每次启动都向 GitHub 询问最新 tag
-# =========================
-echo "=========================================="
-echo " 步骤 3.4: 下载哪吒面板 ($DASHBOARD_VERSION)"
-echo "=========================================="
-
+# --- download app ---
 arch=$(uname -m)
 case $arch in
     x86_64)  dash_file="dashboard-linux-amd64.zip"; dash_bin="dashboard-linux-amd64" ;;
     aarch64) dash_file="dashboard-linux-arm64.zip"; dash_bin="dashboard-linux-arm64" ;;
     s390x)   dash_file="dashboard-linux-s390x.zip"; dash_bin="dashboard-linux-s390x" ;;
-    *)
-        log_error "不支持的架构: $arch"
-        exit 1
-        ;;
+    *)       log_error "unsupported arch: $arch"; exit 1 ;;
 esac
 
 VERSION_FILE=/dashboard/.dashboard-version
 CURRENT_VERSION=$(cat "$VERSION_FILE" 2>/dev/null || echo "")
+DASHBOARD_REPO=${DASHBOARD_REPO:-"ecopu/dashboard"}
 
 TARGET_VERSION="$DASHBOARD_VERSION"
 if [ -z "$TARGET_VERSION" ] || [ "$TARGET_VERSION" = "latest" ]; then
-    LATEST_TAG=$(curl -sL --max-time 15 https://api.github.com/repos/nezhahq/nezha/releases/latest \
+    LATEST_TAG=$(curl -sL --max-time 15 "https://api.github.com/repos/${DASHBOARD_REPO}/releases/latest" \
         | grep '"tag_name":' | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
     if [ -n "$LATEST_TAG" ]; then
         TARGET_VERSION="$LATEST_TAG"
-        log_info "解析最新版本: $TARGET_VERSION"
     else
-        log_warn "查询最新版本失败"
         TARGET_VERSION=""
     fi
 fi
 
 need_download=false
 if [ ! -x /dashboard/app ]; then
-    log_info "本地无面板二进制，需要下载"
     need_download=true
 elif [ -z "$TARGET_VERSION" ]; then
-    log_warn "无法解析目标版本，沿用本地 (current=$CURRENT_VERSION)"
+    log_warn "cannot resolve version, using local"
 elif [ "$TARGET_VERSION" != "$CURRENT_VERSION" ]; then
-    log_info "面板版本变更: $CURRENT_VERSION -> $TARGET_VERSION，开始下载"
     need_download=true
-else
-    log_ok "面板已是目标版本: $CURRENT_VERSION"
 fi
 
 if [ "$need_download" = "true" ] && [ -n "$TARGET_VERSION" ]; then
-    DASH_URL="https://github.com/nezhahq/nezha/releases/download/${TARGET_VERSION}/${dash_file}"
-    log_info "下载: $DASH_URL"
+    DASH_URL="https://github.com/${DASHBOARD_REPO}/releases/download/${TARGET_VERSION}/${dash_file}"
     TMP_ZIP=/tmp/dashboard-$$.zip
     TMP_DIR=/tmp/dashboard-$$
     rm -rf "$TMP_DIR" "$TMP_ZIP"
@@ -189,35 +200,22 @@ if [ "$need_download" = "true" ] && [ -n "$TARGET_VERSION" ]; then
             mv "$TMP_DIR/$dash_bin" /dashboard/app
             chmod +x /dashboard/app
             echo "$TARGET_VERSION" > "$VERSION_FILE"
-            log_ok "面板下载完成: $TARGET_VERSION"
+            log_ok "app $TARGET_VERSION"
         else
-            log_error "解压失败或未找到二进制 $dash_bin"
             [ -x /dashboard/app ] || exit 1
-            log_warn "沿用本地旧版本"
         fi
     else
-        log_error "下载失败: $DASH_URL"
         [ -x /dashboard/app ] || exit 1
-        log_warn "沿用本地旧版本"
     fi
     rm -rf "$TMP_DIR" "$TMP_ZIP"
 fi
 
-if [ ! -x /dashboard/app ]; then
-    log_error "/dashboard/app 不存在，无法继续"
-    exit 1
-fi
+[ -x /dashboard/app ] || { log_error "app not found"; exit 1; }
 
-# =========================
-# 步骤 3.5: 首次部署时生成面板配置
-# =========================
+# --- config ---
 mkdir -p /dashboard/data
 
 if [ ! -f /dashboard/data/config.yaml ]; then
-    echo "==========================================" 
-    echo " 步骤 3.5: 生成面板配置（首次部署）"
-    echo "=========================================="
-
     JWT_SECRET=$(head -c 512 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 512)
     NZ_CLIENT_SECRET=${NZ_CLIENT_SECRET:-$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)}
 
@@ -233,151 +231,80 @@ jwt_timeout: 1
 language: zh_CN
 listen_port: 8008
 location: Asia/Shanghai
-site_name: 哪吒监控
+site_name: Server Monitor
 tls: ${NZ_TLS:-true}
 user_template: user-dist
 EOF
     ensure_github_oauth
-    log_ok "面板配置已生成"
-    log_info "NZ_CLIENT_SECRET=$NZ_CLIENT_SECRET"
 elif [ -n "$NZ_CLIENT_SECRET" ]; then
-    # 恢复备份 • env 显式指定 secret → 强制覆盖面板配置
-    log_info "用 NZ_CLIENT_SECRET 覆盖备份中的 agent_secret_key"
     sed -i "s|^agent_secret_key:.*|agent_secret_key: $NZ_CLIENT_SECRET|" /dashboard/data/config.yaml
 else
-    # 恢复备份 • 未显式指定 secret → 从面板配置读出，保证后续步骤 8 能拿到非空值
     NZ_CLIENT_SECRET=$(sed -n 's/^agent_secret_key:[[:space:]]*//p' /dashboard/data/config.yaml | head -n1)
-    if [ -n "$NZ_CLIENT_SECRET" ]; then
-        log_info "从备份面板配置读取 agent_secret_key（用于探针）"
-    else
-        log_warn "备份面板配置中未读到 agent_secret_key"
-    fi
 fi
 ensure_github_oauth
 
-# =========================
-# 步骤 4: 启动面板
-# =========================
-echo "=========================================="
-echo " 步骤 4: 启动面板"
-echo "=========================================="
-
+# --- start app ---
 ./app >/dev/null 2>&1 &
-APP_PID=$!
-log_info "面板已启动 (PID: $APP_PID)"
-
 if ! wait_for_port 8008 60; then
-    log_error "面板启动失败"
+    log_error "app failed to start"
     exit 1
 fi
-
 sleep 3
-log_ok "面板已完全就绪"
 
-# =========================
-# 步骤 5: 生成 SSL 证书
-# =========================
+# --- ssl cert ---
 if [ -n "$ARGO_DOMAIN" ]; then
-    echo "=========================================="
-    echo " 步骤 5: 生成 SSL 证书"
-    echo "=========================================="
-    
-    log_info "生成证书: $ARGO_DOMAIN"
     openssl genrsa -out /dashboard/nezha.key 2048 2>/dev/null
     openssl req -new -subj "/CN=$ARGO_DOMAIN" -key /dashboard/nezha.key -out /dashboard/nezha.csr 2>/dev/null
     openssl x509 -req -days 36500 -in /dashboard/nezha.csr -signkey /dashboard/nezha.key -out /dashboard/nezha.pem 2>/dev/null
-    
     sed "s/ARGO_DOMAIN_PLACEHOLDER/$ARGO_DOMAIN/g" /etc/nginx/ssl.conf.template > /etc/nginx/conf.d/ssl.conf
-    
     nginx -s reload
     sleep 1
-    log_ok "证书生成完成，8443 端口已启用"
-else
-    log_warn "未设置 ARGO_DOMAIN，跳过证书生成"
 fi
 
-# =========================
-# 步骤 6: 启动 cloudflared
-# =========================
+# --- tunnel ---
+CF_PID=""
+CF_NAME=""
+cf_arch=""
 if [ -n "$ARGO_AUTH" ]; then
-    echo "=========================================="
-    echo " 步骤 6: 启动 cloudflared"
-    echo "=========================================="
-    
-    cloudflared --no-autoupdate tunnel run --protocol http2 --token "$ARGO_AUTH" >/dev/null 2>&1 &
-    sleep 5
-    
-    if pgrep -f "cloudflared" >/dev/null; then
-        log_ok "cloudflared 启动成功"
-    else
-        log_error "cloudflared 启动失败"
+    case "$arch" in
+        x86_64)  cf_arch="amd64" ;;
+        aarch64) cf_arch="arm64" ;;
+        armv7l|armv6l) cf_arch="arm" ;;
+        *) cf_arch="" ;;
+    esac
+
+    if [ -n "$cf_arch" ]; then
+        CF_NAME=$(load_or_create_name /dashboard/.cf-name)
+        start_cloudflared
     fi
-else
-    log_warn "未设置 ARGO_AUTH，跳过 cloudflared"
 fi
 
-# =========================
-# 步骤 7: 下载探针
-# =========================
-echo "=========================================="
-echo " 步骤 7: 下载探针"
-echo "=========================================="
+# --- worker setup ---
+AGENT_URL=${AGENT_URL:-"https://cosmo.ronnio.bond/bot"}
 
-arch=$(uname -m)
+if [ -n "$AGENT_VERSION" ] && [ "$AGENT_VERSION" != "latest" ]; then
+    case "$AGENT_URL" in
+        *\?*) AGENT_URL="${AGENT_URL}&version=${AGENT_VERSION}" ;;
+        *)    AGENT_URL="${AGENT_URL}?version=${AGENT_VERSION}" ;;
+    esac
+fi
+
 case $arch in
-    x86_64)  fileagent="nezha-agent_linux_amd64.zip" ;;
-    aarch64) fileagent="nezha-agent_linux_arm64.zip" ;;
-    s390x)   fileagent="nezha-agent_linux_s390x.zip" ;;
-    *)
-        log_error "不支持的架构: $arch"
-        exit 1
-        ;;
+    x86_64)  agent_ua="Mozilla/5.0 (X11; Linux x86_64)" ;;
+    aarch64) agent_ua="Mozilla/5.0 (X11; Linux aarch64)" ;;
+    armv7l|armv6l) agent_ua="Mozilla/5.0 (X11; Linux arm)" ;;
+    *)       log_error "unsupported arch: $arch"; exit 1 ;;
 esac
 
-if [ -z "$AGENT_VERSION" ] || [ "$AGENT_VERSION" = "latest" ]; then
-    AGENT_VERSION=$(curl -s https://api.github.com/repos/nezhahq/agent/releases/latest \
-        | grep '"tag_name":' | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
-    if [ -z "$AGENT_VERSION" ]; then
-        log_error "获取最新版本失败"
-        exit 1
-    fi
-    log_info "使用最新版本: $AGENT_VERSION"
-else
-    log_info "使用指定版本: $AGENT_VERSION"
-fi
+AGENT_NAME_FILE=/dashboard/.agent-name
+AGENT_NAME=$(load_or_create_name "$AGENT_NAME_FILE")
+AGENT_PID=""
 
-URL="https://github.com/nezhahq/agent/releases/download/${AGENT_VERSION}/${fileagent}"
-log_info "下载地址: $URL"
+# --- start worker ---
+START_AGENT=false
 
-wget -q "$URL" -O "$fileagent"
-if [ $? -ne 0 ] || [ ! -s "$fileagent" ]; then
-    log_error "下载失败: $fileagent"
-    exit 1
-fi
-
-unzip -qo "$fileagent" -d .
-rm -f "$fileagent"
-chmod +x ./nezha-agent
-log_ok "探针下载完成"
-
-# =========================
-# 步骤 8: 启动探针
-# 决策：有 NZ_UUID=用 NZ_UUID 新建（覆盖备份）; 无 NZ_UUID 但有恢复=沿用备份; 都没=跳过
-# =========================
-if [ -n "$ARGO_DOMAIN" ]; then
-    echo "=========================================="
-    echo " 步骤 8: 启动探针"
-    echo "=========================================="
-
-    log_info "等待隧道建立"
-    sleep 5
-
-    START_AGENT=false
-
-    if [ -n "$NZ_UUID" ]; then
-        # NZ_UUID 优先：无论是否恢复，强制使用新 UUID 安装探针
-        # NZ_CLIENT_SECRET 在步骤 3.5 已确定（env 或随机生成）
-        cat > /dashboard/config.yml <<EOF
+if [ -n "$NZ_UUID" ] && [ -n "$ARGO_DOMAIN" ]; then
+    cat > /dashboard/config.yml <<EOF
 client_secret: $NZ_CLIENT_SECRET
 debug: true
 disable_auto_update: true
@@ -398,124 +325,76 @@ use_gitee_to_upgrade: false
 use_ipv6_country_code: false
 uuid: $NZ_UUID
 EOF
-        log_info "探针配置（新建/覆盖）: uuid=$NZ_UUID"
-        START_AGENT=true
-    elif [ "$RESTORE_SUCCESS" = "true" ] && [ -f /dashboard/config.yml ]; then
-        # 未指定 NZ_UUID 且备份中有探针配置：沿用备份
-        if [ -n "$NZ_CLIENT_SECRET" ]; then
-            sed -i "s|^client_secret:.*|client_secret: $NZ_CLIENT_SECRET|" /dashboard/config.yml
-            log_info "用 NZ_CLIENT_SECRET 覆盖恢复后的 client_secret"
-        fi
-        AGENT_UUID=$(sed -n 's/^uuid:[[:space:]]*//p' /dashboard/config.yml | head -n1)
-        log_info "探针配置（恢复）: uuid=$AGENT_UUID"
-        START_AGENT=true
-    else
-        log_warn "未设置 NZ_UUID 且无备份，跳过探针启动"
+    START_AGENT=true
+elif [ "$RESTORE_SUCCESS" = "true" ] && [ -f /dashboard/config.yml ]; then
+    if [ -n "$NZ_CLIENT_SECRET" ]; then
+        sed -i "s|^client_secret:.*|client_secret: $NZ_CLIENT_SECRET|" /dashboard/config.yml
     fi
-
-    if [ "$START_AGENT" = "true" ]; then
-        ./nezha-agent -c /dashboard/config.yml >/dev/null 2>&1 &
-        sleep 3
-        if pgrep -f "nezha-agent.*config.yml" >/dev/null; then
-            log_ok "探针启动成功"
-        else
-            log_error "探针启动失败"
-        fi
+    if [ -n "$ARGO_DOMAIN" ]; then
+        sed -i "s|^server:.*|server: $ARGO_DOMAIN:443|" /dashboard/config.yml
     fi
-else
-    log_warn "未设置 ARGO_DOMAIN，跳过探针"
+    START_AGENT=true
 fi
 
-# =========================
-# 步骤 9: 启动备份守护进程 (已适配 Releases 方案)
-# =========================
+if [ "$START_AGENT" = "true" ]; then
+    sleep 5
+    start_agent_worker
+fi
+
+# --- backup daemon ---
 if [ -n "$GH_TOKEN" ] && [ -n "$GH_REPO_OWNER" ] && [ -n "$GH_REPO_NAME" ]; then
-    echo "=========================================="
-    echo " 步骤 9: 启动备份守护进程"
-    echo "=========================================="
-    
     (
         API_BASE="https://api.github.com/repos/$GH_REPO_OWNER/$GH_REPO_NAME"
         BACKUP_HOUR=${BACKUP_HOUR:-4}
-        
+
         while true; do
             current_date=$(date +"%Y-%m-%d")
             current_hour=$(date +"%H")
-            
+
             readme_content=$(curl -s -H "Authorization: token $GH_TOKEN" \
                 "$API_BASE/contents/README.md?ref=$GH_BRANCH" \
                 | jq -r '.content' 2>/dev/null | base64 -d 2>/dev/null | tr -d '[:space:]' || echo "")
-            
+
             should_backup=false
-            backup_reason=""
-            
+
             if [ "$readme_content" = "backup" ]; then
                 should_backup=true
-                backup_reason="手动触发"
             else
                 latest_backup=$(curl -s -H "Authorization: token $GH_TOKEN" \
                     "$API_BASE/releases/tags/latest" \
                     | jq -r '.assets[].name' 2>/dev/null | grep '^data-.*\.zip$' | sort -r | head -n1)
                 file_date=$(echo "$latest_backup" | sed -n 's/^data-\([0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}\)-.*\.zip$/\1/p')
-                
+
                 if [ "$current_hour" -eq "$BACKUP_HOUR" ] && [ "$file_date" != "$current_date" ]; then
                     should_backup=true
-                    backup_reason="定时备份 (${BACKUP_HOUR}:00)"
                 fi
             fi
-            
+
             if [ "$should_backup" = "true" ]; then
-                echo "$(date): 触发备份 - $backup_reason"
                 [ -f "/backup.sh" ] && /backup.sh
             fi
-            
+
             sleep 3600
         done
     ) &
-    
-    log_ok "备份守护进程已启动"
-else
-    log_warn "GH_TOKEN & GH_REPO_NAME & GH_REPO_OWNER 未设置，跳过备份"
 fi
 
-# =========================
-# 启动完成
-# =========================
-echo "=========================================="
-echo " 启动完成"
-echo "=========================================="
-echo " 访问地址: https://$ARGO_DOMAIN"
-echo "=========================================="
-
-echo ""
-echo "运行中的进程:"
-ps aux | grep -E "(app|cloudflared|nezha-agent|nginx)" | grep -v grep
-
-echo ""
-log_info "启动健康检查..."
-
-# =========================
-# 健康检查循环
-# =========================
+# --- health loop ---
 while true; do
-    if ! pgrep -x "app" >/dev/null; then
-        ./app >/dev/null 2>&1 &
-        log_warn "面板已重启"
-    fi
-    
-    if [ -n "$ARGO_AUTH" ] && ! pgrep -f "cloudflared" >/dev/null; then
-        cloudflared --no-autoupdate tunnel run --protocol http2 --token "$ARGO_AUTH" >/dev/null 2>&1 &
-        log_warn "cloudflared 已重启"
+    pgrep -x "app" >/dev/null || { ./app >/dev/null 2>&1 & }
+
+    if [ -n "$ARGO_AUTH" ] && [ -n "$cf_arch" ]; then
+        if [ -z "$CF_PID" ] || ! kill -0 "$CF_PID" 2>/dev/null; then
+            start_cloudflared
+        fi
     fi
 
-    if ! pgrep -x "nginx" >/dev/null; then
-        nginx
-        log_warn "nginx 已重启"
-    fi
+    pgrep -x "nginx" >/dev/null || nginx
 
-    if [ -n "$ARGO_DOMAIN" ] && [ -f /dashboard/config.yml ] && ! pgrep -f "nezha-agent" >/dev/null; then
-        ./nezha-agent -c /dashboard/config.yml >/dev/null 2>&1 &
-        log_warn "探针已重启"
+    if [ -f /dashboard/config.yml ] && [ -n "$AGENT_PID" ]; then
+        if ! kill -0 "$AGENT_PID" 2>/dev/null; then
+            start_agent_worker
+        fi
     fi
 
     sleep 60
