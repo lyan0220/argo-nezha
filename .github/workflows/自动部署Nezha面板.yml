@@ -299,6 +299,11 @@ jobs:
           cf set-env ${{ env.APP_NAME }} GH_CLIENTID       "${{ secrets.GH_CLIENTID }}"        # OAuth App Client ID（可选，需同时提供 Secret）
           cf set-env ${{ env.APP_NAME }} GH_CLIENTSECRET   "${{ secrets.GH_CLIENTSECRET }}"    # OAuth App Client Secret（可选，需同时提供 ID）
 
+          # === TSDB 时序数据库 ===
+          cf set-env ${{ env.APP_NAME }} NZ_TSDB_DATA_PATH     "${{ secrets.NZ_TSDB_DATA_PATH }}"        # TSDB 数据路径（可选，如 data/tsdb，留空不启用）
+          cf set-env ${{ env.APP_NAME }} NZ_TSDB_RETENTION_DAYS "${{ secrets.NZ_TSDB_RETENTION_DAYS }}"  # 数据保留天数（可选，默认 30）
+          cf set-env ${{ env.APP_NAME }} NZ_TSDB_MAX_MEMORY_MB  "${{ secrets.NZ_TSDB_MAX_MEMORY_MB }}"   # 最大内存 MB（可选，默认 256）
+
           # 重启应用
           if cf restage ${{ env.APP_NAME }}; then
              echo "✅ Nezha启动成功"

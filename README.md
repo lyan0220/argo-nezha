@@ -171,6 +171,11 @@
 | `DOCKER_IMAGE`     | `ghcr.io/<owner>/argo-nezha:latest` | 自定义镜像地址                                                                       |
 | `MEMORY`           | `512M`                              | CF 内存配额                                                                          |
 | `DISK`             | `1024M`                             | CF 磁盘配额                                                                          |
+| `NZ_TSDB_DATA_PATH`     | -                              | TSDB 数据路径（如 `data/tsdb`），留空不启用 TSDB                                      |
+| `NZ_TSDB_RETENTION_DAYS`| `30`                           | TSDB 数据保留天数                                                                     |
+| `NZ_TSDB_MAX_MEMORY_MB` | `256`                          | TSDB 最大内存使用量（MB）                                                             |
+
+> **TSDB 说明**：设置 `NZ_TSDB_DATA_PATH=data/tsdb` 后重启即可启用基于 VictoriaMetrics 的时序数据库，替代 SQLite 存储服务监控历史和服务器指标。启用后旧的 `service_histories` 表会被自动删除，**历史数据不会迁移**。TSDB 数据位于 `/dashboard/data/tsdb`，已包含在自动备份范围内。
 
 > **提示**：`GH_CLIENTID` 和 `GH_CLIENTSECRET` 必须同时提供，容器启动时会补写或覆盖 `/dashboard/data/config.yaml` 中的 `oauth2` 配置节点；否则继续保持当前非 OAuth 登录逻辑。
 

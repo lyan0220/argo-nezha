@@ -44,7 +44,10 @@ ENV ARGO_DOMAIN="" \
     AGENT_VERSION="" \
     DASHBOARD_VERSION="" \
     KEEP_BACKUPS="" \
-    BACKUP_HOUR=""
+    BACKUP_HOUR="" \
+    NZ_TSDB_DATA_PATH="" \
+    NZ_TSDB_RETENTION_DAYS="" \
+    NZ_TSDB_MAX_MEMORY_MB=""
 
 COPY restore.sh /restore.sh
 COPY backup.sh /backup.sh
