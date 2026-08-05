@@ -156,21 +156,27 @@
 
 ### 5.2 可选变量
 
-| Secret             | 默认值                              | 说明                                                                                 |
-| ------------------ | ----------------------------------- | ------------------------------------------------------------------------------------ |
-| `GH_CLIENTID`      | -                                   | GitHub OAuth App 的 Client ID，用于启用 GitHub 登录（需同时提供 `GH_CLIENTSECRET`）  |
-| `GH_CLIENTSECRET`  | -                                   | GitHub OAuth App 的 Client Secret，用于启用 GitHub 登录（需同时提供 `GH_CLIENTID`）  |
-| `NZ_UUID`          | -                                   | 设置则强制用此 UUID 安装容器内探针（覆盖备份）；全新部署需要时填                     |
-| `NZ_CLIENT_SECRET` | 自动生成 / 备份值                   | 首次部署留空 → 随机生成；恢复部署留空 → 沿用备份值；显式设置 → 覆盖面板与探针 secret |
-| `NZ_TLS`           | `true`                              | 探针 TLS 开关                                                                        |
-| `AGENT_VERSION`    | `latest`                            | 探针版本（`nezhahq/agent` 仓库的 tag）                                               |
-| `DASHBOARD_VERSION`| `latest`                            | 哪吒面板版本（`nezhahq/nezha` 仓库的 tag，如 `v2.2.3`），容器启动时下载              |
-| `BACKUP_HOUR`      | `4`                                 | 自动备份时段（北京时间，0-23）                                                       |
-| `KEEP_BACKUPS`     | `5`                                 | Release 中保留的备份附件数量，超出自动删除最旧的                                     |
-| `GH_BRANCH`        | `main`                              | 备份仓库 README 所在分支                                                             |
-| `DOCKER_IMAGE`     | `ghcr.io/<owner>/argo-nezha:latest` | 自定义镜像地址                                                                       |
-| `MEMORY`           | `512M`                              | CF 内存配额                                                                          |
-| `DISK`             | `1024M`                             | CF 磁盘配额                                                                          |
+| Secret                   | 默认值                              | 说明                                                                                 |
+| ------------------------ | ----------------------------------- | ------------------------------------------------------------------------------------ |
+| `GH_CLIENTID`            | -                                   | GitHub OAuth App 的 Client ID，用于启用 GitHub 登录（需同时提供 `GH_CLIENTSECRET`）  |
+| `GH_CLIENTSECRET`        | -                                   | GitHub OAuth App 的 Client Secret，用于启用 GitHub 登录（需同时提供 `GH_CLIENTID`）  |
+| `NZ_UUID`                | -                                   | 设置则强制用此 UUID 安装容器内探针（覆盖备份）；全新部署需要时填                     |
+| `NZ_CLIENT_SECRET`       | 自动生成 / 备份值                   | 首次部署留空 → 随机生成；恢复部署留空 → 沿用备份值；显式设置 → 覆盖面板与探针 secret |
+| `NZ_TLS`                 | `true`                              | 探针 TLS 开关                                                                        |
+| `AGENT_VERSION`          | `latest`                            | 探针版本（`nezhahq/agent` 仓库的 tag）                                               |
+| `DASHBOARD_VERSION`      | `latest`                            | 哪吒面板版本（`nezhahq/nezha` 仓库的 tag，如 `v2.2.3`），容器启动时下载              |
+| `BACKUP_HOUR`            | `4`                                 | 自动备份时段（北京时间，0-23）                                                       |
+| `KEEP_BACKUPS`           | `5`                                 | Release 中保留的备份附件数量，超出自动删除最旧的                                     |
+| `GH_BRANCH`              | `main`                              | 备份仓库 README 所在分支                                                             |
+| `DOCKER_IMAGE`           | `ghcr.io/<owner>/argo-nezha:latest` | 自定义镜像地址                                                                       |
+| `MEMORY`                 | `512M`                              | CF 内存配额                                                                          |
+| `DISK`                   | `1024M`                             | CF 磁盘配额                                                                          |
+| `NZ_TSDB_DATA_PATH`      | -                                   | TSDB 数据路径（如 `data/tsdb`），留空不启用 TSDB                                     |
+| `NZ_TSDB_RETENTION_DAYS` | `30`                                | TSDB 数据保留天数                                                                    |
+| `NZ_TSDB_MAX_MEMORY_MB`  | `256`                               | TSDB 最大内存使用量（MB）                                                            |
+| `NZ_GO_MEM_LIMIT_MB`     | `0`                                 | Go 运行时内存限制（MB），0 表示不限制                                                |
+
+> **TSDB 说明**：设置 `NZ_TSDB_DATA_PATH=data/tsdb` 后重启即可启用基于 VictoriaMetrics 的时序数据库，替代 SQLite 存储服务监控历史和服务器指标。启用后旧的 `service_histories` 表会被自动删除，**历史数据不会迁移**。TSDB 数据位于 `/dashboard/data/tsdb`，已包含在自动备份范围内。
 
 > **提示**：`GH_CLIENTID` 和 `GH_CLIENTSECRET` 必须同时提供，容器启动时会补写或覆盖 `/dashboard/data/config.yaml` 中的 `oauth2` 配置节点；否则继续保持当前非 OAuth 登录逻辑。
 
@@ -262,12 +268,12 @@ data-YYYY-MM-DD-HHMMSS.zip
 
 ### 使用方式
 
-| 目标               | 操作                                                                |
-| ------------------ | ------------------------------------------------------------------- |
-| 跟随哪吒最新版     | 不设 `DASHBOARD_VERSION`（默认 `latest`），每次 restage 自动检查更新 |
-| 锁定具体版本       | 设 `DASHBOARD_VERSION=v2.2.3`，永远只跑该版本                       |
-| 升级（latest 模式）| 在 SAP CF 控制台 restage 应用即可                                   |
-| 紧急回滚           | 改 `DASHBOARD_VERSION` 为旧 tag 并 restage                          |
+| 目标                | 操作                                                                 |
+| ------------------- | -------------------------------------------------------------------- |
+| 跟随哪吒最新版      | 不设 `DASHBOARD_VERSION`（默认 `latest`），每次 restage 自动检查更新 |
+| 锁定具体版本        | 设 `DASHBOARD_VERSION=v2.2.3`，永远只跑该版本                        |
+| 升级（latest 模式） | 在 SAP CF 控制台 restage 应用即可                                    |
+| 紧急回滚            | 改 `DASHBOARD_VERSION` 为旧 tag 并 restage                           |
 
 > ⚠️ 容器重建（不是 restart 进程）时，`/dashboard/app` 与 `.dashboard-version` 都会丢失，下次启动会无条件重下；这是预期行为，不影响功能，只影响首次启动速度（约 +5–10 秒）。
 

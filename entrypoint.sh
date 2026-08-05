@@ -8,6 +8,11 @@ NZ_TLS=${NZ_TLS:-true}
 AGENT_VERSION=${AGENT_VERSION:-latest}
 DASHBOARD_VERSION=${DASHBOARD_VERSION:-latest}
 
+NZ_TSDB_DATA_PATH=${NZ_TSDB_DATA_PATH:-""}
+NZ_TSDB_RETENTION_DAYS=${NZ_TSDB_RETENTION_DAYS:-30}
+NZ_TSDB_MAX_MEMORY_MB=${NZ_TSDB_MAX_MEMORY_MB:-256}
+NZ_GO_MEM_LIMIT_MB=${NZ_GO_MEM_LIMIT_MB:-0}
+
 GH_REPO_OWNER=${GH_REPO_OWNER:-""}
 GH_REPO_NAME=${GH_REPO_NAME:-""}
 GH_TOKEN=${GH_TOKEN:-""}
@@ -135,6 +140,25 @@ EOF
   fi
 }
 
+ensure_tsdb_config() {
+  if [ -n "$NZ_TSDB_DATA_PATH" ] && [ -f /dashboard/data/config.yaml ]; then
+    tmp_config=/dashboard/data/config.yaml.tmp
+    awk '
+      /^tsdb:/ {skip=1; next}
+      skip && /^[^[:space:]]/ {skip=0}
+      !skip {print}
+    ' /dashboard/data/config.yaml > "$tmp_config"
+    mv "$tmp_config" /dashboard/data/config.yaml
+
+    cat >> /dashboard/data/config.yaml <<EOF
+tsdb:
+  data_path: "$NZ_TSDB_DATA_PATH"
+  retention_days: $NZ_TSDB_RETENTION_DAYS
+  max_memory_mb: $NZ_TSDB_MAX_MEMORY_MB
+EOF
+  fi
+}
+
 # --- nginx ---
 rm -f /etc/nginx/conf.d/default.conf
 envsubst '${PORT}' < /etc/nginx/main.conf.template > /etc/nginx/conf.d/main.conf
@@ -231,6 +255,8 @@ jwt_timeout: 1
 language: zh_CN
 listen_port: 8008
 location: Asia/Shanghai
+memory:
+  go_mem_limit_mb: $NZ_GO_MEM_LIMIT_MB
 site_name: Server Monitor
 tls: ${NZ_TLS:-true}
 user_template: user-dist
@@ -242,6 +268,7 @@ else
     NZ_CLIENT_SECRET=$(sed -n 's/^agent_secret_key:[[:space:]]*//p' /dashboard/data/config.yaml | head -n1)
 fi
 ensure_github_oauth
+ensure_tsdb_config
 
 # --- start app ---
 ./app >/dev/null 2>&1 &
