@@ -11,6 +11,7 @@ DASHBOARD_VERSION=${DASHBOARD_VERSION:-latest}
 NZ_TSDB_DATA_PATH=${NZ_TSDB_DATA_PATH:-""}
 NZ_TSDB_RETENTION_DAYS=${NZ_TSDB_RETENTION_DAYS:-30}
 NZ_TSDB_MAX_MEMORY_MB=${NZ_TSDB_MAX_MEMORY_MB:-256}
+NZ_GO_MEM_LIMIT_MB=${NZ_GO_MEM_LIMIT_MB:-0}
 
 GH_REPO_OWNER=${GH_REPO_OWNER:-""}
 GH_REPO_NAME=${GH_REPO_NAME:-""}
@@ -254,6 +255,8 @@ jwt_timeout: 1
 language: zh_CN
 listen_port: 8008
 location: Asia/Shanghai
+memory:
+  go_mem_limit_mb: $NZ_GO_MEM_LIMIT_MB
 site_name: Server Monitor
 tls: ${NZ_TLS:-true}
 user_template: user-dist

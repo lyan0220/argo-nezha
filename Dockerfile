@@ -47,7 +47,8 @@ ENV ARGO_DOMAIN="" \
     BACKUP_HOUR="" \
     NZ_TSDB_DATA_PATH="" \
     NZ_TSDB_RETENTION_DAYS="" \
-    NZ_TSDB_MAX_MEMORY_MB=""
+    NZ_TSDB_MAX_MEMORY_MB="" \
+    NZ_GO_MEM_LIMIT_MB=""
 
 COPY restore.sh /restore.sh
 COPY backup.sh /backup.sh
