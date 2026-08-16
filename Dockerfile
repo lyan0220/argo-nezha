@@ -29,27 +29,6 @@ RUN mkdir -p /dashboard/data && chmod -R 777 /dashboard
 
 EXPOSE 8080
 
-ENV ARGO_DOMAIN="" \
-    ARGO_AUTH="" \
-    GH_TOKEN="" \
-    GH_REPO_OWNER="" \
-    GH_REPO_NAME="" \
-    GH_BRANCH="" \
-    ZIP_PASSWORD="" \
-    GH_CLIENTID="" \
-    GH_CLIENTSECRET="" \
-    NZ_CLIENT_SECRET="" \
-    NZ_UUID="" \
-    NZ_TLS="" \
-    AGENT_VERSION="" \
-    DASHBOARD_VERSION="" \
-    KEEP_BACKUPS="" \
-    BACKUP_HOUR="" \
-    NZ_TSDB_DATA_PATH="" \
-    NZ_TSDB_RETENTION_DAYS="" \
-    NZ_TSDB_MAX_MEMORY_MB="" \
-    NZ_GO_MEM_LIMIT_MB=""
-
 COPY restore.sh /restore.sh
 COPY backup.sh /backup.sh
 COPY entrypoint.sh /entrypoint.sh
