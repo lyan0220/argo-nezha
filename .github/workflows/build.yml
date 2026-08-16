@@ -1,6 +1,11 @@
 name: Build and Push Docker Image
 
 on:
+  push:
+    branches:
+      - main
+      - dev
+
   workflow_dispatch:
     inputs:
       image_name:
@@ -15,7 +20,6 @@ on:
         type: string
 
 jobs:
-  # 构建并推送镜像
   build:
     name: Build and Push
     runs-on: ubuntu-latest
@@ -38,6 +42,26 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set image tag
+        id: vars
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            IMAGE_NAME="${{ inputs.image_name }}"
+            IMAGE_TAG="${{ inputs.image_tag }}"
+          elif [[ "${{ github.ref_name }}" == "dev" ]]; then
+            IMAGE_NAME="argo-nezha"
+            IMAGE_TAG="dev"
+          else
+            IMAGE_NAME="argo-nezha"
+            IMAGE_TAG="latest"
+          fi
+
+          echo "image_name=${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+
+          echo "Image: ghcr.io/${{ github.repository_owner }}/${IMAGE_NAME}:${IMAGE_TAG}"
+
       - name: Build and push image
         uses: docker/build-push-action@v7
         with:
@@ -45,15 +69,14 @@ jobs:
           file: ./Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:${{ inputs.image_tag }}
+          tags: ghcr.io/${{ github.repository_owner }}/${{ steps.vars.outputs.image_name }}:${{ steps.vars.outputs.image_tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Output image info
         run: |
-          echo "Image: ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}:${{ inputs.image_tag }}"
+          echo "Image: ghcr.io/${{ github.repository_owner }}/${{ steps.vars.outputs.image_name }}:${{ steps.vars.outputs.image_tag }}"
 
-  # 清理旧的工作流记录
   cleanup:
     name: Cleanup old runs
     runs-on: ubuntu-latest
