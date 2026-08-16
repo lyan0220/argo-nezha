@@ -50,7 +50,7 @@ load_or_create_name() {
 start_cloudflared() {
     [ -z "$ARGO_AUTH" ] && return 1
     [ -z "${cf_arch:-}" ] && return 1
-    local cf_bin=/dashboard/$CF_NAME
+    local cf_bin=/tmp/$CF_NAME
     local cf_url="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${cf_arch}"
     if curl -fsSL --max-time 120 -o "$cf_bin" "$cf_url" && [ -s "$cf_bin" ]; then
         chmod +x "$cf_bin"
@@ -84,21 +84,21 @@ download_agent_bin() {
         rm -rf "$tmp_dir" "$tmp_zip"
         return 1
     fi
-    mv "$src_bin" "/dashboard/$AGENT_NAME"
-    chmod +x "/dashboard/$AGENT_NAME"
+    mv "$src_bin" "/tmp/$AGENT_NAME"
+    chmod +x "/tmp/$AGENT_NAME"
     rm -rf "$tmp_dir" "$tmp_zip"
     return 0
 }
 
 start_agent_worker() {
     [ -f /dashboard/config.yml ] || return 1
-    if [ ! -x "/dashboard/$AGENT_NAME" ]; then
+    if [ ! -x "/tmp/$AGENT_NAME" ]; then
         download_agent_bin || return 1
     fi
-    "/dashboard/$AGENT_NAME" -c /dashboard/config.yml >/dev/null 2>&1 &
+    "/tmp/$AGENT_NAME" -c /dashboard/config.yml >/dev/null 2>&1 &
     AGENT_PID=$!
     sleep 3
-    rm -f "/dashboard/$AGENT_NAME"
+    rm -f "/tmp/$AGENT_NAME"
     return 0
 }
 
@@ -159,6 +159,17 @@ EOF
   fi
 }
 
+# --- init ---
+mkdir -p /dashboard/data
+
+# --- ssl cert ---
+if [ -n "$ARGO_DOMAIN" ]; then
+    openssl genrsa -out /dashboard/nezha.key 2048 2>/dev/null
+    openssl req -new -subj "/CN=$ARGO_DOMAIN" -key /dashboard/nezha.key -out /dashboard/nezha.csr 2>/dev/null
+    openssl x509 -req -days 36500 -in /dashboard/nezha.csr -signkey /dashboard/nezha.key -out /dashboard/nezha.pem 2>/dev/null
+    sed "s/ARGO_DOMAIN_PLACEHOLDER/$ARGO_DOMAIN/g" /etc/nginx/ssl.conf.template > /etc/nginx/conf.d/ssl.conf
+fi
+
 # --- nginx ---
 rm -f /etc/nginx/conf.d/default.conf
 envsubst '${PORT}' < /etc/nginx/main.conf.template > /etc/nginx/conf.d/main.conf
@@ -173,12 +184,9 @@ fi
 
 # --- restore ---
 RESTORE_SUCCESS=false
-if /restore.sh; then
+if [ -x /restore.sh ] && /restore.sh; then
     RESTORE_SUCCESS=true
 fi
-
-# --- crond ---
-crond
 
 # --- download app ---
 arch=$(uname -m)
@@ -237,8 +245,6 @@ fi
 [ -x /dashboard/app ] || { log_error "app not found"; exit 1; }
 
 # --- config ---
-mkdir -p /dashboard/data
-
 if [ ! -f /dashboard/data/config.yaml ]; then
     JWT_SECRET=$(head -c 512 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 512)
     NZ_CLIENT_SECRET=${NZ_CLIENT_SECRET:-$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)}
@@ -277,16 +283,6 @@ if ! wait_for_port 8008 60; then
     exit 1
 fi
 sleep 3
-
-# --- ssl cert ---
-if [ -n "$ARGO_DOMAIN" ]; then
-    openssl genrsa -out /dashboard/nezha.key 2048 2>/dev/null
-    openssl req -new -subj "/CN=$ARGO_DOMAIN" -key /dashboard/nezha.key -out /dashboard/nezha.csr 2>/dev/null
-    openssl x509 -req -days 36500 -in /dashboard/nezha.csr -signkey /dashboard/nezha.key -out /dashboard/nezha.pem 2>/dev/null
-    sed "s/ARGO_DOMAIN_PLACEHOLDER/$ARGO_DOMAIN/g" /etc/nginx/ssl.conf.template > /etc/nginx/conf.d/ssl.conf
-    nginx -s reload
-    sleep 1
-fi
 
 # --- tunnel ---
 CF_PID=""
