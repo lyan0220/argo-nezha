@@ -182,7 +182,67 @@
 
 ---
 
-## 六、部署到 SAP CF
+## 六、使用 Docker 部署
+
+Docker 部署适合运行在自己的 VPS 或家用服务器上。容器启动时会从 GitHub Releases 下载哪吒面板，因此服务器需要能够访问 GitHub；首次启动通常需要等待几秒到几分钟。
+
+### 6.1 使用 Docker Run
+
+```bash
+mkdir -p ./nezha-data
+
+docker run -d \
+  --name argo-nezha \
+  --restart unless-stopped \
+  -v "$(pwd)/nezha-data:/dashboard/data" \
+  -e ARGO_DOMAIN=nezha.example.com \
+  -e ARGO_AUTH=eyJhIjoi... \
+  # 其他环境变量...
+  oddmath/nezha # 可自定义镜像地址
+```
+
+查看日志和停止容器：
+
+```bash
+docker logs -f argo-nezha
+docker stop argo-nezha
+docker start argo-nezha
+```
+
+### 6.2 使用 Docker Compose
+
+在项目目录创建 `compose.yml`：
+
+```yaml
+services:
+  argo-nezha:
+    image: oddmath/nezha  # 可自定义镜像地址
+    container_name: argo-nezha
+    restart: unless-stopped
+    volumes:
+      - ./nezha-data:/dashboard/data
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      - ARGO_DOMAIN=nezha.example.com
+      - ARGO_AUTH=eyJhIjoi...
+      # 其他环境变量...
+
+```
+
+启动、更新和查看日志：
+
+```bash
+docker compose up -d
+docker compose logs -f argo-nezha
+docker compose pull && docker compose up -d
+```
+
+---
+
+## 七、部署到 SAP CF
 
 **Actions → 自动部署 nezha 面板到 SAP → Run workflow**：
 
@@ -191,21 +251,7 @@
 
 工作流会自动执行：登录 CF → 选择第一个 org/space → `cf push` → 设置环境变量 → `cf restage`。
 
-部署日志末尾输出：
-
-```
-伪装页 URL: https://<app-name>.cfapps.<region>.hana.ondemand.com
-哪吒面板真实访问地址 = https://<ARGO_DOMAIN>
-```
-
 > 通过 `ARGO_DOMAIN` 访问哪吒面板。SAP 路由仅是伪装入口，不要直接访问。
-
----
-
-## 七、首次登录
-
-1. 打开 `https://<ARGO_DOMAIN>`，使用 `admin / admin` 登录
-2. **立即修改密码**
 
 ---
 
@@ -330,11 +376,3 @@ data-YYYY-MM-DD-HHMMSS.zip
 | 工作流报名称冲突                              | 改用自定义 `app_name`，或等几分钟让旧应用清理                               |
 
 ---
-
-## 🔑 三个关键点
-
-1. **GHCR 镜像必须是 public**
-2. **Cloudflare Tunnel URL 必须是 `https://localhost:8443`**
-3. **首次登录立即改密码**
-
-_祝部署顺利！_ 🎉
