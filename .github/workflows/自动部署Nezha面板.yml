@@ -280,7 +280,7 @@ jobs:
           # === 哪吒面板 / Argo 隧道 ===
           cf set-env ${{ env.APP_NAME }} ARGO_DOMAIN       "${{ secrets.ARGO_DOMAIN }}"        # Argo 域名（必填）
           cf set-env ${{ env.APP_NAME }} ARGO_AUTH         "${{ secrets.ARGO_AUTH }}"          # Argo Tunnel Token（必填）
-          cf set-env ${{ env.APP_NAME }} NZ_UUID           "${{ secrets.NZ_UUID }}"            # 探针 UUID（必填）
+          cf set-env ${{ env.APP_NAME }} NZ_UUID           "${{ secrets.NZ_UUID }}"            # 容器内探针 UUID，设置后启用（可选）
           cf set-env ${{ env.APP_NAME }} NZ_CLIENT_SECRET  "${{ secrets.NZ_CLIENT_SECRET }}"   # agent_secret_key（可选，留空自动生成）
           cf set-env ${{ env.APP_NAME }} NZ_TLS            "${{ secrets.NZ_TLS }}"             # 是否启用 TLS（可选，默认 true）
           cf set-env ${{ env.APP_NAME }} AGENT_VERSION     "${{ secrets.AGENT_VERSION }}"      # 探针版本（可选，默认 latest）
@@ -328,8 +328,7 @@ jobs:
           # 获取应用路由
           ROUTE=$(cf app ${{ env.APP_NAME }} | grep "routes:" | awk '{print $2}')
           if [ -n "$ROUTE" ]; then
-            echo "伪装页 URL: https://$ROUTE"
-            echo "⚠️ 哪吒面板真实访问地址 = https://ARGO_DOMAIN（通过 Cloudflare Tunnel）"
+            echo "APP URL: https://$ROUTE"
           else
             echo "⚠️ 未找到应用路由，请检查部署状态。"
           fi

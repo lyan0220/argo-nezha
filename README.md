@@ -160,7 +160,7 @@
 | ------------------------ | ----------------------------------- | ------------------------------------------------------------------------------------ |
 | `GH_CLIENTID`            | -                                   | GitHub OAuth App 的 Client ID，用于启用 GitHub 登录（需同时提供 `GH_CLIENTSECRET`）  |
 | `GH_CLIENTSECRET`        | -                                   | GitHub OAuth App 的 Client Secret，用于启用 GitHub 登录（需同时提供 `GH_CLIENTID`）  |
-| `NZ_UUID`                | -                                   | 设置则强制用此 UUID 安装容器内探针（覆盖备份）；全新部署需要时填                     |
+| `NZ_UUID`                | -                                   | 容器内探针 UUID；设置后启用                     |
 | `NZ_CLIENT_SECRET`       | 自动生成 / 备份值                   | 首次部署留空 → 随机生成；恢复部署留空 → 沿用备份值；显式设置 → 覆盖面板与探针 secret |
 | `NZ_TLS`                 | `true`                              | 探针 TLS 开关                                                                        |
 | `AGENT_VERSION`          | `latest`                            | 探针版本（`nezhahq/agent` 仓库的 tag）                                               |
@@ -189,12 +189,12 @@ Docker 部署适合运行在自己的 VPS 或家用服务器上。容器启动�
 ### 6.1 使用 Docker Run
 
 ```bash
-mkdir -p ./nezha-data
+mkdir -p ./data
 
 docker run -d \
   --name argo-nezha \
   --restart unless-stopped \
-  -v "$(pwd)/nezha-data:/dashboard/data" \
+  -v "$(pwd)/data:/dashboard/data" \
   -e ARGO_DOMAIN=nezha.example.com \
   -e ARGO_AUTH=eyJhIjoi... \
   # 其他环境变量...
@@ -220,7 +220,7 @@ services:
     container_name: argo-nezha
     restart: unless-stopped
     volumes:
-      - ./nezha-data:/dashboard/data
+      - ./data:/dashboard/data
     logging:
       options:
         max-size: "10m"
@@ -283,7 +283,7 @@ data-YYYY-MM-DD-HHMMSS.zip
 └── config.yml    探针配置（如存在；含 client_secret 与 uuid）
 ```
 
-> 备份包含探针配置后，恢复时容器内探针 `uuid` 不会漂移，面板不会把它当成新机器重复添加；`NZ_UUID` 仅在**全新部署**或想**强制重置探针 UUID**时填写（设置后会覆盖备份中的探针配置）。
+> 容器内探针仅由 `NZ_UUID` 启用，恢复备份不会自动启动它。固定使用同一 UUID，面板据此识别为同一机器，不会重复添加。
 
 ### 备份方案技术特点
 
@@ -370,7 +370,7 @@ data-YYYY-MM-DD-HHMMSS.zip
 | Cloudflare Tunnel 显示 502/connection refused | Tunnel URL 必须是 `https://localhost:8443`                                  |
 | 健康检查超时                                  | 工作流已设 `-t 180`；首次拉镜像稍慢，仍超时则检查 GHCR 镜像可见性           |
 | 面板打开但探针离线                            | Cloudflare 网络未开启 gRPC，或 Tunnel TLS 未勾选 No TLS Verify              |
-| 全新部署后服务器列表无容器内探针              | `NZ_UUID` 未设置（全新部署需要；从备份恢复时不需要）                        |
+| 服务器列表无容器内探针                        | 未设置 `NZ_UUID`（探针需此变量启用）                        |
 | 手动备份没触发                                | `README.md` 内容必须**仅有** `backup`（不含其他字符）                       |
 | 重启后数据丢失                                | 检查 `GH_TOKEN` / `GH_REPO_*`，确认备份仓库 Releases 中有 `data-*.zip` 附件 |
 | 工作流报名称冲突                              | 改用自定义 `app_name`，或等几分钟让旧应用清理                               |

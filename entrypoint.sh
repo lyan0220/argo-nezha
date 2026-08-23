@@ -183,10 +183,7 @@ else
 fi
 
 # --- restore ---
-RESTORE_SUCCESS=false
-if [ -x /restore.sh ] && /restore.sh; then
-    RESTORE_SUCCESS=true
-fi
+[ -x /restore.sh ] && /restore.sh
 
 # --- download app ---
 arch=$(uname -m)
@@ -326,7 +323,7 @@ AGENT_PID=""
 # --- start worker ---
 START_AGENT=false
 
-if [ -n "$NZ_UUID" ] && [ -n "$ARGO_DOMAIN" ]; then
+if [ -n "$NZ_UUID" ]; then
     cat > /dashboard/config.yml <<EOF
 client_secret: $NZ_CLIENT_SECRET
 debug: true
@@ -349,14 +346,8 @@ use_ipv6_country_code: false
 uuid: $NZ_UUID
 EOF
     START_AGENT=true
-elif [ "$RESTORE_SUCCESS" = "true" ] && [ -f /dashboard/config.yml ]; then
-    if [ -n "$NZ_CLIENT_SECRET" ]; then
-        sed -i "s|^client_secret:.*|client_secret: $NZ_CLIENT_SECRET|" /dashboard/config.yml
-    fi
-    if [ -n "$ARGO_DOMAIN" ]; then
-        sed -i "s|^server:.*|server: $ARGO_DOMAIN:443|" /dashboard/config.yml
-    fi
-    START_AGENT=true
+else
+    rm -f /dashboard/config.yml
 fi
 
 if [ "$START_AGENT" = "true" ]; then

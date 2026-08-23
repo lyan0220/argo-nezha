@@ -17,7 +17,6 @@ applications:
       GH_TOKEN: ghp_xxxxxxxx
       GH_REPO_OWNER: your_username
       GH_REPO_NAME: nezha-backup
-      GH_BRANCH: main
       ZIP_PASSWORD: change-me
       # === 可选 ===
       # GH_CLIENTID: ""      # 启用 GitHub OAuth 认证时需同时填写 GH_CLIENTSECRET
@@ -25,4 +24,4 @@ applications:
       # NZ_CLIENT_SECRET: ""
       # NZ_TLS: "true"
       # AGENT_VERSION: latest
-      # NZ_UUID: 00000000-0000-0000-0000-000000000000
+      # NZ_UUID: 00000000-0000-0000-0000-000000000000  # 容器内探针 UUID，设置后启用
