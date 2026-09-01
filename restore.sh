@@ -27,7 +27,7 @@ BACKUP_FILE="${1:-}"
 ASSET_ID=""
 
 if [ -z "$BACKUP_FILE" ]; then
-    ASSET_JSON=$(curl -s -H "Authorization: token $GH_TOKEN" \
+    ASSET_JSON=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
         "$API_BASE/releases/tags/latest" \
         | jq -c '[.assets[] | select(.name | test("^data-.*\\.zip$"))] | sort_by(.created_at) | reverse | .[0]')
 
@@ -38,7 +38,7 @@ if [ -z "$BACKUP_FILE" ]; then
     BACKUP_FILE=$(echo "$ASSET_JSON" | jq -r '.name')
     ASSET_ID=$(echo "$ASSET_JSON" | jq -r '.id')
 else
-    ASSET_ID=$(curl -s -H "Authorization: token $GH_TOKEN" \
+    ASSET_ID=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
         "$API_BASE/releases/tags/latest" \
         | jq -r --arg name "$BACKUP_FILE" '.assets[] | select(.name == $name) | .id')
 
@@ -50,7 +50,7 @@ fi
 [ -z "$BACKUP_FILE" ] || [ -z "$ASSET_ID" ] && exit 1
 
 HTTP_CODE=$(curl -L -w "%{http_code}" \
-    -H "Authorization: token $GH_TOKEN" \
+    -H "Authorization: Bearer $GH_TOKEN" \
     -H "Accept: application/octet-stream" \
     -o "$TMP_FILE" \
     "$API_BASE/releases/assets/$ASSET_ID")

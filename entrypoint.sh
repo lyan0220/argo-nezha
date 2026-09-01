@@ -365,7 +365,7 @@ if [ -n "$GH_TOKEN" ] && [ -n "$GH_REPO_OWNER" ] && [ -n "$GH_REPO_NAME" ]; then
             current_date=$(date +"%Y-%m-%d")
             current_hour=$(date +"%H")
 
-            readme_content=$(curl -s -H "Authorization: token $GH_TOKEN" \
+            readme_content=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
                 "$API_BASE/contents/README.md?ref=$GH_BRANCH" \
                 | jq -r '.content' 2>/dev/null | base64 -d 2>/dev/null | tr -d '[:space:]' || echo "")
 
@@ -374,7 +374,7 @@ if [ -n "$GH_TOKEN" ] && [ -n "$GH_REPO_OWNER" ] && [ -n "$GH_REPO_NAME" ]; then
             if [ "$readme_content" = "backup" ]; then
                 should_backup=true
             else
-                latest_backup=$(curl -s -H "Authorization: token $GH_TOKEN" \
+                latest_backup=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
                     "$API_BASE/releases/tags/latest" \
                     | jq -r '.assets[].name' 2>/dev/null | grep '^data-.*\.zip$' | sort -r | head -n1)
                 file_date=$(echo "$latest_backup" | sed -n 's/^data-\([0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}\)-.*\.zip$/\1/p')
