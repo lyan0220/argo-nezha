@@ -1,4 +1,4 @@
-FROM nginx:1.31.2-alpine
+FROM nginx:stable-alpine
 
 RUN apk add --no-cache \
     ca-certificates \
