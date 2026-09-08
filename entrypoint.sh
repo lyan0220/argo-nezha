@@ -161,6 +161,7 @@ EOF
 
 # --- init ---
 mkdir -p /dashboard/data
+mkdir -p /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi
 
 # --- ssl cert ---
 if [ -n "$ARGO_DOMAIN" ]; then

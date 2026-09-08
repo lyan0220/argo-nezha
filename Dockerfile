@@ -1,4 +1,4 @@
-FROM nginx:stable-alpine
+FROM nginx:1.31.2-alpine
 
 RUN apk add --no-cache \
     ca-certificates \
@@ -20,8 +20,9 @@ COPY main.conf.template /etc/nginx/main.conf.template
 RUN rm -f /etc/nginx/conf.d/default.conf
 COPY ssl.conf.template /etc/nginx/ssl.conf.template
 
-RUN chmod -R 777 /etc/nginx/conf.d /var/cache/nginx /var/log/nginx \
-    && touch /var/run/nginx.pid && chmod 666 /var/run/nginx.pid
+RUN chmod -R 777 /etc/nginx/conf.d /var/log/nginx \
+    && mkdir -p /tmp/nginx \
+    && chmod 777 /tmp/nginx
 
 ENV TZ=Asia/Shanghai
 WORKDIR /dashboard
