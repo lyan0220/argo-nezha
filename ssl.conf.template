@@ -3,8 +3,8 @@ server {
     http2 on;
 
     server_name ARGO_DOMAIN_PLACEHOLDER;
-    ssl_certificate          /dashboard/nezha.pem; # 域名证书路径
-    ssl_certificate_key      /dashboard/nezha.key; # 域名私钥路径
+    ssl_certificate          /dashboard/fullchain.pem; # 域名证书路径
+    ssl_certificate_key      /dashboard/privkey.pem; # 域名私钥路径
     # ssl_stapling on;
     ssl_session_timeout 1d;
     ssl_session_cache shared:SSL:10m; # 如果与其他配置冲突，请注释此项
@@ -24,7 +24,7 @@ server {
         grpc_send_timeout 600s;
         grpc_socket_keepalive on;
         client_max_body_size 10m;
-        grpc_buffer_size 4m;
+        grpc_buffer_size 64k;
         grpc_pass grpc://dashboard;
     }
     # websocket 相关
@@ -46,9 +46,9 @@ server {
         # proxy_set_header nz-realip $remote_addr; # 如果你使用nginx作为最外层，就把上面一行注释掉，启用此行
         proxy_read_timeout 3600s;
         proxy_send_timeout 3600s;
-        proxy_buffer_size 128k;
-        proxy_buffers 4 256k;
-        proxy_busy_buffers_size 256k;
+        proxy_buffer_size 16k;
+        proxy_buffers 4 64k;
+        proxy_busy_buffers_size 128k;
         proxy_max_temp_file_size 0;
         proxy_pass http://127.0.0.1:8008;
     }
@@ -56,5 +56,5 @@ server {
 
 upstream dashboard {
     server 127.0.0.1:8008;
-    keepalive 512;
+    keepalive 32;
 }

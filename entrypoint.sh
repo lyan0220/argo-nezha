@@ -164,9 +164,10 @@ mkdir -p /dashboard/data
 
 # --- ssl cert ---
 if [ -n "$ARGO_DOMAIN" ]; then
-    openssl genrsa -out /dashboard/nezha.key 2048 2>/dev/null
-    openssl req -new -subj "/CN=$ARGO_DOMAIN" -key /dashboard/nezha.key -out /dashboard/nezha.csr 2>/dev/null
-    openssl x509 -req -days 36500 -in /dashboard/nezha.csr -signkey /dashboard/nezha.key -out /dashboard/nezha.pem 2>/dev/null
+    openssl genrsa -out /dashboard/privkey.pem 2048 2>/dev/null
+    openssl req -new -subj "/CN=$ARGO_DOMAIN" -key /dashboard/privkey.pem -out /dashboard/cert.csr 2>/dev/null
+    openssl x509 -req -days 36500 -in /dashboard/cert.csr -signkey /dashboard/privkey.pem -out /dashboard/fullchain.pem 2>/dev/null
+    rm -f /dashboard/cert.csr
     sed "s/ARGO_DOMAIN_PLACEHOLDER/$ARGO_DOMAIN/g" /etc/nginx/ssl.conf.template > /etc/nginx/conf.d/ssl.conf
 fi
 
