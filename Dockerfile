@@ -1,6 +1,7 @@
-FROM nginx:1.31.2-alpine
+FROM nginx:1.30.4
 
-RUN apk add --no-cache \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
     ca-certificates \
     wget \
     unzip \
@@ -11,10 +12,12 @@ RUN apk add --no-cache \
     openssl \
     jq \
     procps \
+    netcat-openbsd \
     tzdata \
     zip \
-    sqlite \
-    sqlite-libs
+    sqlite3 \
+    gettext-base \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY main.conf.template /etc/nginx/main.conf.template
 RUN rm -f /etc/nginx/conf.d/default.conf
