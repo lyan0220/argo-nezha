@@ -20,7 +20,8 @@ GH_BRANCH=${GH_BRANCH:-main}
 ZIP_PASSWORD=${ZIP_PASSWORD:-""}
 
 PORT=${PORT:-8080}
-export PORT
+GRPC_ACCESS_LOG=${GRPC_ACCESS_LOG:-off}
+export PORT GRPC_ACCESS_LOG
 
 log_info()  { echo "[I] $(date '+%H:%M:%S') $1"; }
 log_ok()    { echo "[+] $(date '+%H:%M:%S') $1"; }
@@ -169,7 +170,8 @@ if [ -n "$ARGO_DOMAIN" ]; then
     openssl req -new -subj "/CN=$ARGO_DOMAIN" -key /dashboard/privkey.pem -out /dashboard/cert.csr 2>/dev/null
     openssl x509 -req -days 36500 -in /dashboard/cert.csr -signkey /dashboard/privkey.pem -out /dashboard/fullchain.pem 2>/dev/null
     rm -f /dashboard/cert.csr
-    sed "s/ARGO_DOMAIN_PLACEHOLDER/$ARGO_DOMAIN/g" /etc/nginx/ssl.conf.template > /etc/nginx/conf.d/ssl.conf
+    sed "s/ARGO_DOMAIN_PLACEHOLDER/$ARGO_DOMAIN/g" /etc/nginx/ssl.conf.template \
+        | envsubst '${GRPC_ACCESS_LOG}' > /etc/nginx/conf.d/ssl.conf
 fi
 
 # --- nginx ---

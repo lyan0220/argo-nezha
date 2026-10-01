@@ -163,6 +163,7 @@
 | `NZ_UUID`                | -                                   | 容器内探针 UUID；设置后启用                     |
 | `NZ_CLIENT_SECRET`       | 自动生成 / 备份值                   | 首次部署留空 → 随机生成；恢复部署留空 → 沿用备份值；显式设置 → 覆盖面板与探针 secret |
 | `NZ_TLS`                 | `true`                              | 探针 TLS 开关                                                                        |
+| `GRPC_ACCESS_LOG`        | `off`                               | gRPC 请求 access log；设为 `off` 关闭，或设为日志路径（如 `/dev/stdout`）             |
 | `AGENT_VERSION`          | `latest`                            | 探针版本（`nezhahq/agent` 仓库的 tag）                                               |
 | `DASHBOARD_VERSION`      | `latest`                            | 哪吒面板版本（`nezhahq/nezha` 仓库的 tag，如 `v2.2.3`），容器启动时下载              |
 | `BACKUP_HOUR`            | `4`                                 | 自动备份时段（北京时间，0-23）                                                       |

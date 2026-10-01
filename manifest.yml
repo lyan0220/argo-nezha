@@ -23,5 +23,6 @@ applications:
       # GH_CLIENTSECRET: ""  # 启用 GitHub OAuth 认证时需同时填写 GH_CLIENTID
       # NZ_CLIENT_SECRET: ""
       # NZ_TLS: "true"
+      # GRPC_ACCESS_LOG: /dev/stdout  # gRPC access log；默认 off，可设为日志路径或 off
       # AGENT_VERSION: latest
       # NZ_UUID: 00000000-0000-0000-0000-000000000000  # 容器内探针 UUID，设置后启用
